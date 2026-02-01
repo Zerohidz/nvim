@@ -1,0 +1,1 @@
+/home/zerohidz/.config/omarchy/current/theme/neovim.lua
