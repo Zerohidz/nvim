@@ -3,6 +3,9 @@
 -- bootstrap lazy.nvim, LazyVim and your plugins
 require("config.lazy")
 
+-- Türkçe klavye düzeltmesini yükle
+require("config.turkish_keys").setup()
+
 -- #############################################################################
 -- # Neovim Türkçe Q Klavye Normal Mod Optimizasyonu (Tam Kapsamlı)
 -- #############################################################################
