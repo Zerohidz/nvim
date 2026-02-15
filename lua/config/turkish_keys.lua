@@ -2,58 +2,39 @@
 local M = {}
 
 function M.setup()
-  -- 1. Mevcut langmap ayarlarını temizle (Çatışmayı önlemek için)
-  vim.opt.langmap = ""
   vim.opt.langremap = false
 
-  -- 2. Dönüşüm Tablosu
-  local tr_maps = {
-    -- Küçük Harfler
-    ["ı"] = "i",
-    ["i"] = "'",
-    ["ş"] = ";",
-    ["ğ"] = "[",
-    ["ü"] = "]",
-    ["ö"] = ",",
-    ["ç"] = ".",
+  local function escape(str)
+    return vim.fn.escape(str, [[;,."|\]])
+  end
 
-    -- Büyük Harfler (Shift kombinasyonları)
-    -- Not: Türkçe Q klavyede 'i' tuşuna Shift ile basınca 'İ' çıkar.
-    ["İ"] = "\"",
-    ["Ş"] = ":",
-    ["Ğ"] = "{",
-    ["Ü"] = "}",
-    ["Ö"] = "<",
-    ["Ç"] = ">",
-
-    ["."] = "/",
-    [":"] = "?",
-    [","] = "\\",
-    [";"] = "|",
+  -- Türkçe Q klavye: bastığın tuş -> Vim'in görmesi gereken
+  local maps = {
+    { "ı", "i" },
+    { "i", "'" },
+    { "ş", ";" },
+    { "ğ", "[" },
+    { "ü", "]" },
+    { "ö", "," },
+    { "ç", "." },
+    { "İ", '"' },
+    { "Ş", ":" },
+    { "Ğ", "{" },
+    { "Ü", "}" },
+    { "Ö", "<" },
+    { "Ç", ">" },
+    { ".", "/" },
+    { ":", "?" },
+    { ",", "\\" },
+    { ";", "|" },
   }
 
-  -- 3. Uygulanacak Modlar
-  -- Normal (n), Görsel (v, x), Operatör Bekleyen (o)
-  local modes = { "n", "v", "x", "o" }
-
-  -- 4. Döngüsel Haritalama
-  for tr_key, en_key in pairs(tr_maps) do
-    for _, mode in ipairs(modes) do
-      -- Varsayılan olarak remap = true (Eklentiler için gerekli)
-      local should_remap = true
-
-      -- KONTROL: Eğer hedef tuş (en_key) tablomuzda bir 'kaynak' (key) ise,
-      -- bu bir döngü yaratır (Örn: ı -> i -> ').
-
-      if tr_maps[en_key] then should_remap = false end
-
-      vim.keymap.set(mode, tr_key, en_key, {
-        remap = should_remap, -- Dinamik olarak belirlenir
-        silent = true,
-        desc = "TR Layout Fix: " .. tr_key .. " -> " .. en_key
-      })
-    end
+  local pairs_list = {}
+  for _, pair in ipairs(maps) do
+    table.insert(pairs_list, escape(pair[1]) .. escape(pair[2]))
   end
+
+  vim.opt.langmap = table.concat(pairs_list, ",")
 end
 
 return M
