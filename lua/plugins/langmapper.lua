@@ -12,7 +12,7 @@ return {
     -- / → .   ? → :   \ → ,   | → ;
     require("langmapper").setup({
       hack_keymap = true,           -- vim.keymap.set ve nvim_set_keymap'i wrap et
-      disable_hack_modes = { "i" }, -- Insert modda çevirme
+      disable_hack_modes = { "i", "c" }, -- Insert ve command-line modda çevirme (arama modunda Türkçe harf yazabilmek için)
       map_all_ctrl = true,
       default_layout = [[i';[],.":{}<>/?\|]],
       use_layouts = { "tr" },
