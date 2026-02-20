@@ -63,6 +63,104 @@ function M.setup()
     vim.keymap.set({ "x", "o" }, "i" .. pair[1], "i" .. pair[2], { remap = true, silent = true })
     vim.keymap.set({ "x", "o" }, "a" .. pair[1], "a" .. pair[2], { remap = true, silent = true })
   end
+
+  -- ---------------------------------------------------------------------------
+  -- Makro kaydı fix: Neovim makroları pre-langmap karakterleri kaydeder (ı, ğ…)
+  -- RecordingLeave'de normal-mod kısımlarını Türkçe→İngilizce çeviririz.
+  -- Insert moddaki Türkçe metne dokunulmaz.
+  -- ---------------------------------------------------------------------------
+  local tr_to_en_macro = {
+    ["ı"] = "i",  ["i"] = "'",  ["ş"] = ";",  ["ğ"] = "[",  ["ü"] = "]",
+    ["ö"] = ",",  ["ç"] = ".",  ["İ"] = '"',  ["Ş"] = ":",  ["Ğ"] = "{",
+    ["Ü"] = "}",  ["Ö"] = "<",  ["Ç"] = ">",  ["."] = "/",  [":"] = "?",
+    [","] = "\\", [";"] = "|",
+  }
+
+  local function fix_macro_register(reg)
+    local macro = vim.fn.getreg(reg)
+    if macro == "" then return end
+
+    local function lmap(c) return tr_to_en_macro[c] or c end
+
+    -- Doğrudan insert moda giren tek karakterler (operatör sonrası değil)
+    -- Not: s/S flash plugin arama olarak da kullanılıyor; insert state'de
+    --      çevirme yapılmadığı için arama terimleri de korunur.
+    local ENTERS_INSERT = { i=true, a=true, o=true, I=true, A=true, O=true, s=true, S=true, R=true }
+    -- Motion bekleyen operatörler
+    local OPERATORS     = { c=true, d=true, y=true, g=true, [">"]=true, ["<"]=true, ["="]=true }
+    -- Motion sonrası insert moda giren operatörler (sadece c)
+    local CHANGE_OPS    = { c=true }
+    -- Sonrasındaki 1 karakteri ham bırakan komutlar (langmap arama modunda uygulanmaz)
+    local CHAR_KEEP     = { f=true, F=true, t=true, T=true }
+
+    local result = {}
+    -- "normal" | "after_op" | "after_op_mod" | "insert" | "search" | "char_keep"
+    local state = "normal"
+    local pending_op = nil
+    local pos = 1
+
+    while pos <= #macro do
+      local byte = macro:byte(pos)
+      local len  = (byte < 0x80) and 1 or (byte < 0xE0) and 2 or (byte < 0xF0) and 3 or 4
+      local char = macro:sub(pos, pos + len - 1)
+      pos = pos + len
+
+      if state == "insert" then
+        table.insert(result, char)
+        if byte == 0x1B or byte == 0x03 then  -- ESC veya Ctrl-C
+          state = "normal"
+        end
+
+      elseif state == "search" then
+        -- Arama terimi: langmap arama modunda uygulanmaz → çevirme yok
+        table.insert(result, char)
+        if byte == 0x0D or byte == 0x1B then  -- CR veya ESC → aramadan çık
+          state = "normal"
+        end
+
+      elseif state == "char_keep" then
+        -- f/F/t/T sonrası 1 literal karakter: olduğu gibi bırak
+        table.insert(result, char)
+        state = "normal"
+
+      elseif state == "normal" then
+        local t = lmap(char)
+        table.insert(result, t)
+        if     ENTERS_INSERT[t]     then state = "insert"
+        elseif t == "/" or t == "?" then state = "search"
+        elseif CHAR_KEEP[t]         then state = "char_keep"
+        elseif OPERATORS[t]         then state = "after_op" ; pending_op = t
+        end
+
+      elseif state == "after_op" then
+        local t = lmap(char)
+        table.insert(result, t)
+        if byte >= 0x31 and byte <= 0x39 then          -- rakam sayacı → bekle
+        elseif t == "i" or t == "a"      then state = "after_op_mod"
+        elseif t == pending_op           then          -- cc / dd / yy
+          state = CHANGE_OPS[pending_op] and "insert" or "normal" ; pending_op = nil
+        else                                           -- doğrudan motion: cw, d$…
+          state = CHANGE_OPS[pending_op] and "insert" or "normal" ; pending_op = nil
+        end
+
+      elseif state == "after_op_mod" then
+        -- text object karakteri: ciw'daki w
+        local t = lmap(char)
+        table.insert(result, t)
+        state = CHANGE_OPS[pending_op] and "insert" or "normal"
+        pending_op = nil
+      end
+    end
+
+    vim.fn.setreg(reg, table.concat(result))
+  end
+
+  vim.api.nvim_create_autocmd("RecordingLeave", {
+    callback = function()
+      local reg = vim.v.event.regname
+      vim.schedule(function() fix_macro_register(reg) end)
+    end,
+  })
 end
 
 return M
