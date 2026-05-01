@@ -6,7 +6,12 @@ return {
       "github:Crashdummyy/mason-registry",
     },
     ensure_installed = {
-      "lua-language-server",
+      -- Python araçları
+      "pyright", -- Language Server (LSP)
+      "black",   -- Formatter (Kodu otomatik düzenler)
+      "debugpy", -- Debugger (Hata ayıklama için)
+      "ruff",    -- Linter (Hataları ve stil bozukluklarını gösterir, çok hızlıdır)     "lua-language-server",
+
       "xmlformatter",
       "csharpier",
       "prettier",

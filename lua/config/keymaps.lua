@@ -20,8 +20,16 @@ local _sw_end = [[\l\ze\u\|\u\ze\u\l\|\a\ze\d\|\d\ze\a\|[^_]\ze_\|\k\ze\>]]
 -- Geri: önceki subword'ün BAŞINA atla  (\zs = cursor buraya düşer)
 local _sw_bwd = [[\l\zs\u\|\u\zs\u\ze\l\|_\+\zs\k\|\a\zs\d\|\d\zs\a\|\<\zs\k]]
 
-local function _sw_next() for _ = 1, vim.v.count1 do vim.fn.search(_sw_end, "W") end end
-local function _sw_prev() for _ = 1, vim.v.count1 do vim.fn.search(_sw_bwd, "bW") end end
+local function _sw_next()
+  for _ = 1, vim.v.count1 do
+    vim.fn.search(_sw_end, "W")
+  end
+end
+local function _sw_prev()
+  for _ = 1, vim.v.count1 do
+    vim.fn.search(_sw_bwd, "bW")
+  end
+end
 
 -- Terminalde: üv / ğv (langmap: ü→], ğ→[)
 vim.keymap.set({ "n", "x", "o" }, "]v", _sw_next, { desc = "Next subword" })
@@ -31,3 +39,13 @@ vim.keymap.set({ "n", "x", "o" }, "[v", _sw_prev, { desc = "Prev subword" })
 -- bozuluyor. Explicit üv/ğv tanımlamayla langmap+prefix zinciri bypass edilir.
 vim.keymap.set({ "n", "x", "o" }, "üv", _sw_next, { desc = "Next subword" })
 vim.keymap.set({ "n", "x", "o" }, "ğv", _sw_prev, { desc = "Prev subword" })
+
+-- Terminal
+local opts = { noremap = true, silent = true }
+vim.keymap.set("t", "<C-n>", [[<C-\><C-n>]], { noremap = true })
+
+-- Terminal modundayken doğrudan pencere değiştirme
+vim.keymap.set("t", "<C-h>", [[<C-\><C-n><C-w>h]], opts)
+vim.keymap.set("t", "<C-j>", [[<C-\><C-n><C-w>j]], opts)
+vim.keymap.set("t", "<C-k>", [[<C-\><C-n><C-w>k]], opts)
+vim.keymap.set("t", "<C-l>", [[<C-\><C-n><C-w>l]], opts)
