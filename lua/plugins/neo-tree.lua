@@ -1,12 +1,23 @@
 return {
   "nvim-neo-tree/neo-tree.nvim",
+  -- Tuş kombinasyonunu eziyoruz
+  keys = {
+    {
+      "<leader>e",
+      function()
+        -- LazyVim'in root tespitini bypass edip direkt Neovim'in o anki dizininde (cwd) açar
+        require("neo-tree.command").execute({ toggle = true, dir = vim.uv.cwd() })
+      end,
+      desc = "Explorer Neo-tree (cwd ile aç)",
+    },
+  },
   opts = {
     filesystem = {
       filtered_items = {
-        visible = false,         -- Gizli öğeleri varsayılan olarak gösterme (H ile açılır)
-        hide_dotfiles = false,   -- Nokta ile başlayanları gizle
-        hide_gitignored = false, -- .gitignore içindekileri (input/output) GÖSTER
-        never_show = {           -- Bunları hiçbir zaman görme
+        visible = false,
+        hide_dotfiles = false,
+        hide_gitignored = false,
+        never_show = {
           ".git",
           ".DS_Store",
           "thumbs.db",
