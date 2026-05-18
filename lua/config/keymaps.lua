@@ -49,3 +49,20 @@ vim.keymap.set("t", "<C-h>", [[<C-\><C-n><C-w>h]], opts)
 vim.keymap.set("t", "<C-j>", [[<C-\><C-n><C-w>j]], opts)
 vim.keymap.set("t", "<C-k>", [[<C-\><C-n><C-w>k]], opts)
 vim.keymap.set("t", "<C-l>", [[<C-\><C-n><C-w>l]], opts)
+
+-- 1 Numaralı Terminal (<C-t>)
+vim.keymap.set({ "n", "t" }, "<C-t>", "<cmd>1ToggleTerm<CR>", { noremap = true, silent = true, desc = "Terminal 1" })
+
+-- 2 Numaralı Terminal (<C-.>)
+vim.keymap.set({ "n", "t" }, "<C-.>", "<cmd>2ToggleTerm<CR>", { noremap = true, silent = true, desc = "Terminal 2" })
+
+-- (Opsiyonel) Klavye <C-/> tuşunu da aynı yere yolluyorsa (LazyVim varsayılanı için):
+vim.keymap.set({ "n", "t" }, "<C-/>", "<cmd>2ToggleTerm<CR>", { noremap = true, silent = true, desc = "Terminal 2" })
+
+-- 3 Numaralı Terminal (<C-,> yani Ctrl + Virgül)
+vim.keymap.set(
+  { "n", "t" },
+  "<C-,>",
+  "<cmd>3ToggleTerm direction=float<CR>",
+  { noremap = true, silent = true, desc = "Terminal 3" }
+)
