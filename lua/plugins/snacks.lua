@@ -5,7 +5,7 @@ return {
       sources = {
         files = {
           hidden = true,
-          ignored = true,
+          ignored = false,
           exclude = { ".git/" },
         },
         projects = {
