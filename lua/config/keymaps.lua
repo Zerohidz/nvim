@@ -60,9 +60,4 @@ vim.keymap.set({ "n", "t" }, "<C-.>", "<cmd>2ToggleTerm<CR>", { noremap = true, 
 vim.keymap.set({ "n", "t" }, "<C-/>", "<cmd>2ToggleTerm<CR>", { noremap = true, silent = true, desc = "Terminal 2" })
 
 -- 3 Numaralı Terminal (<C-,> yani Ctrl + Virgül)
-vim.keymap.set(
-  { "n", "t" },
-  "<C-,>",
-  "<cmd>3ToggleTerm direction=float<CR>",
-  { noremap = true, silent = true, desc = "Terminal 3" }
-)
+vim.keymap.set({ "n", "t" }, "<C-,>", "<cmd>3ToggleTerm<CR>", { noremap = true, silent = true, desc = "Terminal 3" })
