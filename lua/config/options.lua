@@ -10,4 +10,8 @@ vim.opt.timeoutlen = 3000
 if vim.g.neovide then
   vim.o.guifont = "CaskaydiaMono Nerd Font:h10"
   vim.g.neovide_scale_factor = 1.0
+  vim.g.neovide_padding_top = 30
+  vim.g.neovide_padding_bottom = 30
+  vim.g.neovide_padding_left = 30
+  vim.g.neovide_padding_right = 30
 end
