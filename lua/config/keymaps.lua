@@ -61,3 +61,23 @@ vim.keymap.set({ "n", "t" }, "<C-/>", "<cmd>2ToggleTerm<CR>", { noremap = true, 
 
 -- 3 Numaralı Terminal (<C-,> yani Ctrl + Virgül)
 vim.keymap.set({ "n", "t" }, "<C-,>", "<cmd>3ToggleTerm<CR>", { noremap = true, silent = true, desc = "Terminal 3" })
+
+-- Neovide: Hyprland Super+V → Shift+Insert gönderir, terminal bunu paste'e çevirirdi
+-- Neovide ise Shift+Insert'i handle etmez, explicit map lazım
+if vim.g.neovide then
+  local function paste()
+    vim.api.nvim_paste(vim.fn.getreg("+"), true, -1)
+  end
+  -- Super+V (Hyprland → Shift+Insert olarak gelir)
+  vim.keymap.set({ "n", "v", "i", "c", "t" }, "<S-Insert>", paste, { noremap = true, silent = true, desc = "Paste (Neovide)" })
+
+  -- Shift+Enter: insert modda normal newline
+  vim.keymap.set("i", "<S-CR>", "<CR>", { noremap = true, silent = true, desc = "Shift+Enter newline" })
+  -- Shift+Enter: terminal modda kitty escape sequence gönder (Claude Code bunu bekliyor)
+  vim.keymap.set("t", "<S-CR>", function()
+    local chan = vim.b.terminal_job_id
+    if chan then
+      vim.api.nvim_chan_send(chan, "\x1b[13;2u")
+    end
+  end, { noremap = true, silent = true, desc = "Shift+Enter → kitty sequence (terminal)" })
+end

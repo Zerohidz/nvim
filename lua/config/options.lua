@@ -8,6 +8,7 @@ vim.opt.relativenumber = false
 vim.opt.timeoutlen = 3000
 
 if vim.g.neovide then
+  vim.env.TERM_PROGRAM = "ghostty"
   vim.o.guifont = "CaskaydiaMono Nerd Font:h10"
   vim.g.neovide_scale_factor = 1.0
   vim.g.neovide_opacity = 0.9
