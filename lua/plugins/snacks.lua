@@ -2,6 +2,24 @@ return {
   "folke/snacks.nvim",
   opts = {
     picker = {
+      win = {
+        input = {
+          keys = {
+            ["<C-l>"] = { "focus_preview", mode = { "i", "n" } },
+          },
+        },
+        list = {
+          keys = {
+            ["<C-l>"] = "focus_preview",
+            ["<C-h>"] = "focus_input",
+          },
+        },
+        preview = {
+          keys = {
+            ["<C-h>"] = "focus_list",
+          },
+        },
+      },
       sources = {
         files = {
           hidden = true,
