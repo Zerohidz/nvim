@@ -97,13 +97,7 @@ if vim.env.NVIM_AS_TERM == "1" then
   vim.api.nvim_create_autocmd("VimEnter", {
     callback = function()
       vim.schedule(function()
-        -- xdg-terminal-exec wrapper'ı (-e ile) çalıştırılacak komutu buradan geçirir
-        local as_term_cmd = vim.env.NVIM_AS_TERM_CMD
-        if as_term_cmd and as_term_cmd ~= "" then
-          vim.cmd("terminal " .. as_term_cmd)
-        else
-          vim.cmd("terminal")
-        end
+        vim.cmd("terminal")
         term_buf = vim.api.nvim_get_current_buf()
         vim.bo[term_buf].buflisted = false -- bufferline/tab listesinde görünmesin
         vim.cmd("startinsert")
