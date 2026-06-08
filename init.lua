@@ -124,34 +124,22 @@ if vim.env.NVIM_AS_TERM == "1" then
     return pid and vim.uv.fs_realpath("/proc/" .. pid .. "/cwd")
   end
 
-  -- aynı pencerede, terminalin bulunduğu dizini kök alarak dosya gezgini
-  -- görünümüne geç. Terminal arka planda canlı + gizli kalır.
-  local function go_explorer_layout()
+  -- terminal-normal moddan: aynı pencerede, terminalin bulunduğu dizini kök
+  -- alarak normal nvim (n . gibi) görünümüne geç. Terminal arka planda canlı kalır.
+  vim.keymap.set("n", "<leader>N", function()
     local cwd = term_real_cwd() or vim.uv.cwd()
     vim.cmd("cd " .. vim.fn.fnameescape(cwd))
     vim.cmd("enew")
     vim.wo.number = true
     vim.wo.relativenumber = true
     require("neo-tree.command").execute({ toggle = true, dir = cwd })
-  end
+  end, { desc = "AS_TERM: terminalin dizininde dosya gezginini aç" })
 
-  local function go_terminal()
+  -- normal görünümden terminale geri dön
+  vim.keymap.set("n", "<leader>T", function()
     if term_buf and vim.api.nvim_buf_is_valid(term_buf) then
       vim.api.nvim_set_current_buf(term_buf)
       vim.cmd("startinsert")
     end
-  end
-
-  -- <C-g> ("geç"): tek tuş, iki yönlü toggle. Terminaldeysen explorer'a,
-  -- oradaysan terminale geçer (terminal-insert modunda da çalışır, mod değiştirmeye gerek yok).
-  vim.keymap.set({ "n", "t" }, "<C-g>", function()
-    if vim.bo.buftype == "terminal" then
-      if vim.fn.mode() == "t" then
-        vim.cmd("stopinsert")
-      end
-      go_explorer_layout()
-    else
-      go_terminal()
-    end
-  end, { desc = "AS_TERM: terminal <-> dosya gezgini toggle" })
+  end, { desc = "AS_TERM: terminale geri dön" })
 end
