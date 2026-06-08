@@ -36,3 +36,5 @@ if vim.g.neovide then
   vim.g.terminal_color_14 = "#89b482"
   vim.g.terminal_color_15 = "#d4be98"
 end
+
+vim.g.autoformat = false
