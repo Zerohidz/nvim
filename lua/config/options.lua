@@ -16,6 +16,7 @@ if vim.g.neovide then
   vim.g.neovide_padding_bottom = 30
   vim.g.neovide_padding_left = 30
   vim.g.neovide_padding_right = 30
+  vim.g.neovide_scroll_animation_far_lines = 0
 
   -- Neovide GUI'de host terminal yok, Neovim default ANSI palette kullanıyor.
   -- Ghostty/omarchy temasındaki paletle eşitle (ghostty.conf'tan birebir).
