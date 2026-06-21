@@ -81,3 +81,14 @@ if vim.g.neovide then
     end
   end, { noremap = true, silent = true, desc = "Shift+Enter → kitty sequence (terminal)" })
 end
+
+
+-- Sadece dosya adını kopyalar (Örn: index.js)
+vim.keymap.set('n', '<leader>yf', "<cmd>let @+ = expand('%:t')<CR>", { desc = 'Dosya adını kopyala' })
+
+-- ama neo-tree kökünün olduğu yerden başlayarak dosya yolunu kopyalar (Örn: /home/user/project/index.js)
+vim.keymap.set('n', '<leader>yp', function()
+  local relative_path = vim.fn.expand('%:.') -- '.' işareti aktif çalışma dizinine göre path verir
+  vim.fn.setreg('+', relative_path)
+  print("Kopyalanan yol (CWD): " .. relative_path)
+end, { desc = 'Dosya yolunu kopyala' })
