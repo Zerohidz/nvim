@@ -9,7 +9,12 @@ vim.opt.timeoutlen = 3000
 
 if vim.g.neovide then
   vim.env.TERM_PROGRAM = "ghostty"
-  vim.o.guifont = "FiraCode Nerd Font:h10"
+  -- Sistem fontunu omarchy'den oku, hardcode etme (omarchy font set → restart yeter)
+  local font = vim.fn.systemlist("omarchy-font-current")[1]
+  if vim.v.shell_error ~= 0 or not font or font == "" then
+    font = "CaskaydiaMono Nerd Font Mono"
+  end
+  vim.o.guifont = font .. ":h10"
   vim.g.neovide_scale_factor = 1.0
   vim.g.neovide_opacity = 0.9
   vim.g.neovide_padding_top = 30
