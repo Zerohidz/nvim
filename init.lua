@@ -40,20 +40,20 @@ vim.keymap.set("v", "s", '"_s')
 -- CUT (bilinçli kesme)
 -- =========================
 
--- Normal mode cut
-vim.keymap.set("n", "<leader>d", "d", opts)
-vim.keymap.set("n", "<leader>dd", "dd", opts)
+-- Normal mode cut ("+ register'a sabit: clipboard opt'undan bağımsız, SSH'da da yazar)
+vim.keymap.set("n", "<leader>d", '"+d', opts)
+vim.keymap.set("n", "<leader>dd", '"+dd', opts)
 
 -- Visual mode cut
-vim.keymap.set("v", "<leader>d", "d", opts)
+vim.keymap.set("v", "<leader>d", '"+d', opts)
 
 -- Change + cut
-vim.keymap.set("n", "<leader>c", "c", opts)
-vim.keymap.set("v", "<leader>c", "c", opts)
+vim.keymap.set("n", "<leader>c", '"+c', opts)
+vim.keymap.set("v", "<leader>c", '"+c', opts)
 
 -- Cut s
-vim.keymap.set("n", "<leader>s", "s")
-vim.keymap.set("v", "<leader>s", "s")
+vim.keymap.set("n", "<leader>s", '"+s')
+vim.keymap.set("v", "<leader>s", '"+s')
 
 -- #############################################################################
 -- # Küçük kişisel ayarlar

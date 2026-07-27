@@ -1,7 +1,15 @@
+require("config.remote_clipboard").setup()
 -- Options are automatically loaded before lazy.nvim startup
 -- Default options that are always set: https://github.com/LazyVim/LazyVim/blob/main/lua/lazyvim/config/options.lua
 -- Add any additional options here
 vim.opt.relativenumber = false
+
+-- LazyVim default: SSH dışında clipboard="unnamedplus", yani her x/y/d
+-- sistem panosuna gider. remote_clipboard.lua artık gerçek bir + register
+-- provider taktığı için bu görünür hale geldi (x visual modda cut gibi
+-- davranıyordu). Local register'ları pano'dan ayır; pano için explicit
+-- "+y / "+x veya <leader>yf, <leader>yp gibi mapler kullan.
+vim.opt.clipboard = ""
 
 -- Türkçe klavye textobject fix: ı→i'den sonra İ/Ğ için yeterli süre
 -- Default 300ms, 500ms ile tuş arası 500ms'e kadar olan gecikmeler çalışır
