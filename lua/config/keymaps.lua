@@ -42,7 +42,91 @@ vim.keymap.set({ "n", "x", "o" }, "ğv", _sw_prev, { desc = "Prev subword" })
 
 -- Terminal
 local opts = { noremap = true, silent = true }
-vim.keymap.set("t", "<C-n>", [[<C-\><C-n>]], { noremap = true })
+-- Mod değişmeden ÖNCE gerçek imleç kolonunu kaydet: t->n geçişinde nvim
+-- cursor satır sonundaysa (gap pozisyonu) son karaktere clamp ediyor,
+-- geçiş SONRASI okumak 1 kayık pozisyon veriyordu.
+local function _save_term_cursor_and_go_normal()
+  vim.b.term_cursor_line = vim.fn.line(".")
+  vim.b.term_cursor_vcol = vim.fn.virtcol(".")
+  return vim.api.nvim_replace_termcodes([[<C-\><C-n>]], true, true, true)
+end
+vim.keymap.set("t", "<Esc>", _save_term_cursor_and_go_normal, { expr = true, noremap = true })
+
+-- Gerçek Escape'i claude code'a göndermek istersen (chat:cancel default'u):
+-- <Esc> artık normal moda geçiyor, onun yerine <C-e> ham ESC byte'ı yollar.
+-- Sadece terminal-insert modda ('t'), başka moddaki C-e'ye dokunmuyor.
+vim.keymap.set("t", "<C-e>", function()
+  local chan = vim.b.terminal_job_id
+  if chan then
+    vim.api.nvim_chan_send(chan, "\x1b")
+  end
+end, opts)
+
+-- Terminal normal modda (<C-n> sonrası): C-d/C-u/gg/G nvim buffer'ında
+-- scrollback gezmek yerine, altta koşan programa (claude code) yollansın.
+-- claude code: Ctrl+D/Ctrl+U scroll:halfPage (~/.claude/keybindings.json),
+-- gg/G için Ctrl+Home/Ctrl+End default (scroll:top/bottom).
+vim.api.nvim_create_autocmd("TermOpen", {
+  desc = "Terminal normal modda C-d/C-u/gg/G'yi job'a forward et",
+  callback = function(args)
+    local send = function(bytes)
+      return function()
+        local chan = vim.b.terminal_job_id
+        if chan then
+          vim.api.nvim_chan_send(chan, bytes)
+          vim.defer_fn(function()
+            vim.cmd("redraw!")
+          end, 80)
+        end
+      end
+    end
+    local map_opts = { buffer = args.buf, noremap = true, silent = true }
+    -- Ctrl+D/Ctrl+U yerine PageDown/PageUp: claude code'da bunlar zaten
+    -- default halfPage scroll yapıyor, Ctrl+U'yu input kill-line için
+    -- serbest bırakıyoruz (Scroll context modsuz aktif, çakışıyordu).
+    vim.keymap.set("n", "<C-d>", send("\x1b[6~"), map_opts) -- PageDown
+    vim.keymap.set("n", "<C-u>", send("\x1b[5~"), map_opts) -- PageUp
+    vim.keymap.set("n", "gg", send("\x1b[1;5H"), map_opts) -- Ctrl+Home
+    -- G (scroll:bottom, Ctrl+End): claude code'un bilinen bug'ı (>1 sayfa
+    -- atlarsa pane blank kalıyor, upstream #71509). Workaround: force redraw
+    -- hemen ardından gönder. Ctrl+L default'ta chat:clearInput olduğu için
+    -- (input'u silmesin diye) app:redraw'ı ~/.claude/keybindings.json'da
+    -- boş duran Ctrl+F'e bağladık, onu gönderiyoruz.
+    vim.keymap.set("n", "G", function()
+      local chan = vim.b.terminal_job_id
+      if chan then
+        vim.api.nvim_chan_send(chan, "\x1b[1;5F") -- Ctrl+End
+        vim.defer_fn(function()
+          vim.api.nvim_chan_send(chan, "\x06") -- Ctrl+F -> app:redraw
+        end, 50)
+      end
+    end, map_opts)
+
+    -- i/a (langmapper ile ı/a): insert'e dönmeden önce, kaydedilen kolon ile
+    -- şu anki nvim cursor kolonu arasındaki farkı gerçek sol/sağ ok tuşu
+    -- olarak job'a yollayıp uygulamanın imlecini oraya taşı, sonra insert'e gir.
+    -- a, i'nin bir sağına geçer (vim'deki append semantiği).
+    local function _goto_real_cursor(extra_right)
+      local chan = vim.b.terminal_job_id
+      local saved_line = vim.b.term_cursor_line
+      local saved_vcol = vim.b.term_cursor_vcol
+      if chan and saved_line and vim.fn.line(".") == saved_line then
+        local delta = saved_vcol - vim.fn.virtcol(".") - extra_right
+        if delta ~= 0 then
+          local seq = delta > 0 and "\x1b[D" or "\x1b[C"
+          vim.api.nvim_chan_send(chan, seq:rep(math.abs(delta)))
+        end
+      end
+      vim.cmd("startinsert")
+    end
+    vim.keymap.set("n", "i", function()
+      _goto_real_cursor(0)
+    end, map_opts)
+    vim.keymap.set("n", "a", function()
+      _goto_real_cursor(1)
+    end, map_opts)
+  end,
+})
 
 -- Terminal modundayken doğrudan pencere değiştirme
 vim.keymap.set("t", "<C-h>", [[<C-\><C-n><C-w>h]], opts)
