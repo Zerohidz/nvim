@@ -20,6 +20,7 @@ require("config.turkish_keys").setup()
 
 -- Tek karakter sil
 vim.keymap.set("n", "x", '"_x', opts)
+vim.keymap.set("v", "x", '"_x', opts)
 
 -- Normal mode delete
 vim.keymap.set("n", "d", '"_d', opts)
@@ -54,6 +55,9 @@ vim.keymap.set("v", "<leader>c", '"+c', opts)
 -- Cut s
 vim.keymap.set("n", "<leader>s", '"+s')
 vim.keymap.set("v", "<leader>s", '"+s')
+
+-- Cut x (blackhole x'in aksine, bilinçli olarak pano'ya yazar)
+vim.keymap.set("v", "<leader>x", '"+x', opts)
 
 -- #############################################################################
 -- # Küçük kişisel ayarlar

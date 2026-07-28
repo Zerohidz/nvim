@@ -4,12 +4,12 @@ require("config.remote_clipboard").setup()
 -- Add any additional options here
 vim.opt.relativenumber = false
 
--- LazyVim default: SSH dışında clipboard="unnamedplus", yani her x/y/d
--- sistem panosuna gider. remote_clipboard.lua artık gerçek bir + register
--- provider taktığı için bu görünür hale geldi (x visual modda cut gibi
--- davranıyordu). Local register'ları pano'dan ayır; pano için explicit
--- "+y / "+x veya <leader>yf, <leader>yp gibi mapler kullan.
-vim.opt.clipboard = ""
+-- unnamedplus: y (normal+visual) otomatik sistem panosuna gider.
+-- x/d/c/s (normal+visual) init.lua'da blackhole ("_) register'a map'li,
+-- bu yüzden clipboard opt'undan etkilenmezler — hiçbir yere yazmazlar.
+-- <leader>d/c/s/x ise "+ register'a sabit, bilinçli cut için hep pano'ya
+-- yazar (SSH/tmux'ta remote_clipboard.lua'nın osc52/wl-copy provider'ıyla).
+vim.opt.clipboard = "unnamedplus"
 
 -- Türkçe klavye textobject fix: ı→i'den sonra İ/Ğ için yeterli süre
 -- Default 300ms, 500ms ile tuş arası 500ms'e kadar olan gecikmeler çalışır
