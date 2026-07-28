@@ -62,6 +62,83 @@ vim.keymap.set("t", "<C-e>", function()
   end
 end, opts)
 
+-- Gerçek imleci (job'daki) hedef ekran koluna taşı: kaydedilen pozisyonla
+-- hedef arasındaki farkı sol/sağ ok byte'ı olarak gönderir, kaydı günceller.
+local function _real_cursor_goto(target_vcol)
+  local chan = vim.b.terminal_job_id
+  local saved_line = vim.b.term_cursor_line
+  if not chan or not saved_line or vim.fn.line(".") ~= saved_line then
+    return false
+  end
+  local delta = vim.b.term_cursor_vcol - target_vcol
+  if delta ~= 0 then
+    local seq = delta > 0 and "\x1b[D" or "\x1b[C"
+    vim.api.nvim_chan_send(chan, seq:rep(math.abs(delta)))
+  end
+  vim.b.term_cursor_vcol = target_vcol
+  return true
+end
+
+-- w/b/iw motion'ının sınırlarını, gerçek terminal buffer'ını hiç değiştirmeden
+-- hesaplamak için: satırı tek satırlık bir scratch buffer'a kopyala, vim'in
+-- kendi motion/textobject algoritmasını orda çalıştır, sonucu satırdaki byte
+-- kolonlarına çevir. dw/db/diw'in davranışını simüle etmek için kullanılıyor.
+local function _word_bounds(kind)
+  local line = vim.fn.getline(".")
+  local col = vim.fn.col(".")
+  local scratch = vim.api.nvim_create_buf(false, true)
+  vim.api.nvim_buf_set_lines(scratch, 0, -1, false, { line })
+  local start_col, end_col
+  vim.api.nvim_buf_call(scratch, function()
+    vim.api.nvim_win_set_cursor(0, { 1, col - 1 })
+    if kind == "w" then
+      vim.cmd("normal! w")
+      local c = vim.api.nvim_win_get_cursor(0)
+      start_col = col
+      end_col = c[2] + 1
+      if end_col <= start_col then
+        end_col = #line + 1
+      end
+    elseif kind == "b" then
+      vim.cmd("normal! b")
+      local c = vim.api.nvim_win_get_cursor(0)
+      start_col = c[2] + 1
+      end_col = col
+    elseif kind == "iw" then
+      -- Visual+getpos nvim_buf_call içinde güvenilmezdi; asıl 'diw' operatörünü
+      -- scratch'te çalıştırıp öncesi/sonrası satırı diff'leyerek aralığı bul.
+      vim.cmd("normal! diw")
+      local newline = vim.api.nvim_buf_get_lines(scratch, 0, 1, false)[1] or ""
+      local maxp = math.min(#line, #newline)
+      local p = 0
+      while p < maxp and line:sub(p + 1, p + 1) == newline:sub(p + 1, p + 1) do
+        p = p + 1
+      end
+      start_col = p + 1
+      end_col = p + 1 + (#line - #newline)
+    end
+  end)
+  vim.api.nvim_buf_delete(scratch, { force = true })
+  if not start_col or not end_col or end_col <= start_col then
+    return nil
+  end
+  local before = line:sub(1, start_col - 1)
+  local deleted = line:sub(start_col, end_col - 1)
+  return vim.fn.strdisplaywidth(before) + 1, vim.fn.strdisplaywidth(deleted)
+end
+
+-- dw/db/diw: hedef aralığa gerçek imleci taşı, o kadar Delete tuşu gönder.
+local function _delete_word(kind)
+  local start_vcol, width = _word_bounds(kind)
+  if not start_vcol or width == 0 then
+    return
+  end
+  if _real_cursor_goto(start_vcol) then
+    local chan = vim.b.terminal_job_id
+    vim.api.nvim_chan_send(chan, ("\x1b[3~"):rep(width))
+  end
+end
+
 -- Terminal normal modda (<C-n> sonrası): C-d/C-u/gg/G nvim buffer'ında
 -- scrollback gezmek yerine, altta koşan programa (claude code) yollansın.
 -- claude code: Ctrl+D/Ctrl+U scroll:halfPage (~/.claude/keybindings.json),
@@ -102,28 +179,34 @@ vim.api.nvim_create_autocmd("TermOpen", {
       end
     end, map_opts)
 
-    -- i/a (langmapper ile ı/a): insert'e dönmeden önce, kaydedilen kolon ile
-    -- şu anki nvim cursor kolonu arasındaki farkı gerçek sol/sağ ok tuşu
-    -- olarak job'a yollayıp uygulamanın imlecini oraya taşı, sonra insert'e gir.
-    -- a, i'nin bir sağına geçer (vim'deki append semantiği).
-    local function _goto_real_cursor(extra_right)
-      local chan = vim.b.terminal_job_id
-      local saved_line = vim.b.term_cursor_line
-      local saved_vcol = vim.b.term_cursor_vcol
-      if chan and saved_line and vim.fn.line(".") == saved_line then
-        local delta = saved_vcol - vim.fn.virtcol(".") - extra_right
-        if delta ~= 0 then
-          local seq = delta > 0 and "\x1b[D" or "\x1b[C"
-          vim.api.nvim_chan_send(chan, seq:rep(math.abs(delta)))
-        end
-      end
-      vim.cmd("startinsert")
-    end
+    -- i/a (langmapper ile ı/a): insert'e dönmeden önce gerçek imleci şu anki
+    -- nvim cursor kolonuna taşı. a, i'nin bir sağına geçer (append semantiği).
     vim.keymap.set("n", "i", function()
-      _goto_real_cursor(0)
+      _real_cursor_goto(vim.fn.virtcol("."))
+      vim.cmd("startinsert")
     end, map_opts)
     vim.keymap.set("n", "a", function()
-      _goto_real_cursor(1)
+      _real_cursor_goto(vim.fn.virtcol(".") + 1)
+      vim.cmd("startinsert")
+    end, map_opts)
+
+    -- x: cursor'daki karakteri gerçek input'ta sil (insert'e geçmez).
+    vim.keymap.set("n", "x", function()
+      if _real_cursor_goto(vim.fn.virtcol(".")) then
+        vim.api.nvim_chan_send(vim.b.terminal_job_id, "\x1b[3~")
+      end
+    end, map_opts)
+
+    -- dw/db/diw: vim'in kendi word motion/textobject'ini simüle edip
+    -- gerçek input'ta o kadar Delete tuşuyla siler (insert'e geçmez).
+    vim.keymap.set("n", "dw", function()
+      _delete_word("w")
+    end, map_opts)
+    vim.keymap.set("n", "db", function()
+      _delete_word("b")
+    end, map_opts)
+    vim.keymap.set("n", "diw", function()
+      _delete_word("iw")
     end, map_opts)
   end,
 })
