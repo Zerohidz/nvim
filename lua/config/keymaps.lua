@@ -50,31 +50,28 @@ local function _save_term_cursor_and_go_normal()
   vim.b.term_cursor_vcol = vim.fn.virtcol(".")
   return vim.api.nvim_replace_termcodes([[<C-\><C-n>]], true, true, true)
 end
-vim.keymap.set("t", "<Esc>", _save_term_cursor_and_go_normal, { expr = true, noremap = true })
+vim.keymap.set("t", "<C-n>", _save_term_cursor_and_go_normal, { expr = true, noremap = true })
 
--- Gerçek Escape'i claude code'a göndermek istersen (chat:cancel default'u):
--- <Esc> artık normal moda geçiyor, onun yerine <C-e> ham ESC byte'ı yollar.
--- Sadece terminal-insert modda ('t'), başka moddaki C-e'ye dokunmuyor.
-vim.keymap.set("t", "<C-e>", function()
-  local chan = vim.b.terminal_job_id
-  if chan then
-    vim.api.nvim_chan_send(chan, "\x1b")
-  end
-end, opts)
-
--- Gerçek imleci (job'daki) hedef ekran koluna taşı: kaydedilen pozisyonla
--- hedef arasındaki farkı sol/sağ ok byte'ı olarak gönderir, kaydı günceller.
-local function _real_cursor_goto(target_vcol)
+-- Gerçek imleci (job'daki) hedef satır+ekran koluna taşı: kaydedilen pozisyonla
+-- hedef arasındaki farkı önce yukarı/aşağı, sonra sol/sağ ok byte'ı olarak
+-- gönderir, kaydı günceller. Çok satırlı input'ta satır atlamayı da destekler.
+local function _real_cursor_goto(target_line, target_vcol)
   local chan = vim.b.terminal_job_id
   local saved_line = vim.b.term_cursor_line
-  if not chan or not saved_line or vim.fn.line(".") ~= saved_line then
+  if not chan or not saved_line then
     return false
+  end
+  local line_delta = saved_line - target_line
+  if line_delta ~= 0 then
+    local vseq = line_delta > 0 and "\x1b[A" or "\x1b[B" -- Up/Down
+    vim.api.nvim_chan_send(chan, vseq:rep(math.abs(line_delta)))
   end
   local delta = vim.b.term_cursor_vcol - target_vcol
   if delta ~= 0 then
     local seq = delta > 0 and "\x1b[D" or "\x1b[C"
     vim.api.nvim_chan_send(chan, seq:rep(math.abs(delta)))
   end
+  vim.b.term_cursor_line = target_line
   vim.b.term_cursor_vcol = target_vcol
   return true
 end
@@ -133,27 +130,54 @@ local function _delete_word(kind)
   if not start_vcol or width == 0 then
     return
   end
-  if _real_cursor_goto(start_vcol) then
+  if _real_cursor_goto(vim.fn.line("."), start_vcol) then
     local chan = vim.b.terminal_job_id
     vim.api.nvim_chan_send(chan, ("\x1b[3~"):rep(width))
   end
 end
 
--- Terminal normal modda (<C-n> sonrası): C-d/C-u/gg/G nvim buffer'ında
--- scrollback gezmek yerine, altta koşan programa (claude code) yollansın.
+-- Terminal buffer'ında (bash toggleterm) o an gerçekten claude code çalışıyor
+-- mu: buffer adı hep "bash" (toggleterm cmd bash, claude elle başlatılıyor),
+-- o yüzden statik değil dinamik kontrol lazım: shell'in child process'lerine bak.
+local function _is_claude_running()
+  local chan = vim.b.terminal_job_id
+  if not chan then
+    return false
+  end
+  local ok, pid = pcall(vim.fn.jobpid, chan)
+  if not ok or not pid then
+    return false
+  end
+  local ok2, out = pcall(vim.fn.system, { "ps", "--ppid", tostring(pid), "-o", "args=" })
+  return ok2 and out:find("claude") ~= nil
+end
+
+-- Bir tuşu default nvim davranışına (remap edilmeden) geri besler.
+local function _fallback(keys)
+  vim.api.nvim_feedkeys(vim.api.nvim_replace_termcodes(keys, true, false, true), "n", false)
+end
+
+-- Terminal normal modda (<C-n> sonrası): claude code çalışıyorsa C-d/C-u/gg/G
+-- nvim buffer'ında scrollback gezmek yerine job'a yollansın; çalışmıyorsa
+-- (düz bash) nvim'in kendi default davranışına düşülür.
 -- claude code: Ctrl+D/Ctrl+U scroll:halfPage (~/.claude/keybindings.json),
 -- gg/G için Ctrl+Home/Ctrl+End default (scroll:top/bottom).
 vim.api.nvim_create_autocmd("TermOpen", {
-  desc = "Terminal normal modda C-d/C-u/gg/G'yi job'a forward et",
+  desc = "Terminal normal modda C-d/C-u/gg/G'yi (claude çalışıyorsa) job'a forward et",
   callback = function(args)
-    local send = function(bytes)
+    -- Hem nvim'in kendi scrollback davranışı hem (claude çalışıyorsa) job'a
+    -- forward: ikisi çakışmıyor, ikisi de olsun.
+    local send = function(bytes, fallback_keys)
       return function()
-        local chan = vim.b.terminal_job_id
-        if chan then
-          vim.api.nvim_chan_send(chan, bytes)
-          vim.defer_fn(function()
-            vim.cmd("redraw!")
-          end, 80)
+        _fallback(fallback_keys)
+        if _is_claude_running() then
+          local chan = vim.b.terminal_job_id
+          if chan then
+            vim.api.nvim_chan_send(chan, bytes)
+            vim.defer_fn(function()
+              vim.cmd("redraw!")
+            end, 80)
+          end
         end
       end
     end
@@ -161,38 +185,53 @@ vim.api.nvim_create_autocmd("TermOpen", {
     -- Ctrl+D/Ctrl+U yerine PageDown/PageUp: claude code'da bunlar zaten
     -- default halfPage scroll yapıyor, Ctrl+U'yu input kill-line için
     -- serbest bırakıyoruz (Scroll context modsuz aktif, çakışıyordu).
-    vim.keymap.set("n", "<C-d>", send("\x1b[6~"), map_opts) -- PageDown
-    vim.keymap.set("n", "<C-u>", send("\x1b[5~"), map_opts) -- PageUp
-    vim.keymap.set("n", "gg", send("\x1b[1;5H"), map_opts) -- Ctrl+Home
+    vim.keymap.set("n", "<C-d>", send("\x1b[6~", "<C-d>"), map_opts) -- PageDown
+    vim.keymap.set("n", "<C-u>", send("\x1b[5~", "<C-u>"), map_opts) -- PageUp
+    vim.keymap.set("n", "gg", send("\x1b[1;5H", "gg"), map_opts) -- Ctrl+Home
     -- G (scroll:bottom, Ctrl+End): claude code'un bilinen bug'ı (>1 sayfa
     -- atlarsa pane blank kalıyor, upstream #71509). Workaround: force redraw
     -- hemen ardından gönder. Ctrl+L default'ta chat:clearInput olduğu için
     -- (input'u silmesin diye) app:redraw'ı ~/.claude/keybindings.json'da
     -- boş duran Ctrl+F'e bağladık, onu gönderiyoruz.
     vim.keymap.set("n", "G", function()
-      local chan = vim.b.terminal_job_id
-      if chan then
-        vim.api.nvim_chan_send(chan, "\x1b[1;5F") -- Ctrl+End
-        vim.defer_fn(function()
-          vim.api.nvim_chan_send(chan, "\x06") -- Ctrl+F -> app:redraw
-        end, 50)
+      _fallback("G")
+      if _is_claude_running() then
+        local chan = vim.b.terminal_job_id
+        if chan then
+          vim.api.nvim_chan_send(chan, "\x1b[1;5F") -- Ctrl+End
+          vim.defer_fn(function()
+            vim.api.nvim_chan_send(chan, "\x06") -- Ctrl+F -> app:redraw
+          end, 50)
+        end
       end
     end, map_opts)
 
     -- i/a (langmapper ile ı/a): insert'e dönmeden önce gerçek imleci şu anki
     -- nvim cursor kolonuna taşı. a, i'nin bir sağına geçer (append semantiği).
     vim.keymap.set("n", "i", function()
-      _real_cursor_goto(vim.fn.virtcol("."))
+      if not _is_claude_running() then
+        _fallback("i")
+        return
+      end
+      _real_cursor_goto(vim.fn.line("."), vim.fn.virtcol("."))
       vim.cmd("startinsert")
     end, map_opts)
     vim.keymap.set("n", "a", function()
-      _real_cursor_goto(vim.fn.virtcol(".") + 1)
+      if not _is_claude_running() then
+        _fallback("a")
+        return
+      end
+      _real_cursor_goto(vim.fn.line("."), vim.fn.virtcol(".") + 1)
       vim.cmd("startinsert")
     end, map_opts)
 
     -- x: cursor'daki karakteri gerçek input'ta sil (insert'e geçmez).
     vim.keymap.set("n", "x", function()
-      if _real_cursor_goto(vim.fn.virtcol(".")) then
+      if not _is_claude_running() then
+        _fallback("x")
+        return
+      end
+      if _real_cursor_goto(vim.fn.line("."), vim.fn.virtcol(".")) then
         vim.api.nvim_chan_send(vim.b.terminal_job_id, "\x1b[3~")
       end
     end, map_opts)
@@ -200,12 +239,24 @@ vim.api.nvim_create_autocmd("TermOpen", {
     -- dw/db/diw: vim'in kendi word motion/textobject'ini simüle edip
     -- gerçek input'ta o kadar Delete tuşuyla siler (insert'e geçmez).
     vim.keymap.set("n", "dw", function()
+      if not _is_claude_running() then
+        _fallback("dw")
+        return
+      end
       _delete_word("w")
     end, map_opts)
     vim.keymap.set("n", "db", function()
+      if not _is_claude_running() then
+        _fallback("db")
+        return
+      end
       _delete_word("b")
     end, map_opts)
     vim.keymap.set("n", "diw", function()
+      if not _is_claude_running() then
+        _fallback("diw")
+        return
+      end
       _delete_word("iw")
     end, map_opts)
   end,
