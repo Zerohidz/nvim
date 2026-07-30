@@ -52,6 +52,28 @@ local function _save_term_cursor_and_go_normal()
 end
 vim.keymap.set("t", "<C-n>", _save_term_cursor_and_go_normal, { expr = true, noremap = true })
 
+-- Ctrl+O (app:toggleTranscript) sonrası transcript'te arama tuşu "/" — ama
+-- "/" claude code'un keybindings.json action listesinde yok, rebind edilemiyor.
+-- Bunun yerine: Ctrl+O basılınca bir sonraki "." tuşunu tek seferlik "/" olarak
+-- gönder (langmapper'daki . -> / arama alışkanlığı). Sonraki noktalar normal.
+-- NOT: langmapper hack_keymap QWERTY-referans lhs bekliyor (disable_hack_modes
+-- içinde "t" yok); fiziksel "." tuşuna denk gelmesi için lhs "/" yazılmalı
+-- (default_layout tablosunda QWERTY "/" <-> tr "." aynı fiziksel tuş).
+vim.keymap.set("t", "<C-o>", function()
+  local chan = vim.b.terminal_job_id
+  if chan then
+    vim.api.nvim_chan_send(chan, "\x0f") -- Ctrl+O
+    vim.b.transcript_search_armed = true
+  end
+end, opts)
+vim.keymap.set("t", "/", function()
+  local chan = vim.b.terminal_job_id
+  if chan then
+    vim.api.nvim_chan_send(chan, vim.b.transcript_search_armed and "/" or ".")
+  end
+  vim.b.transcript_search_armed = false
+end, opts)
+
 -- Gerçek imleci (job'daki) hedef satır+ekran koluna taşı: kaydedilen pozisyonla
 -- hedef arasındaki farkı önce yukarı/aşağı, sonra sol/sağ ok byte'ı olarak
 -- gönderir, kaydı günceller. Çok satırlı input'ta satır atlamayı da destekler.
