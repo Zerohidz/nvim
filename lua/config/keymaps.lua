@@ -157,6 +157,44 @@ local function _fallback(keys)
   vim.api.nvim_feedkeys(vim.api.nvim_replace_termcodes(keys, true, false, true), "n", false)
 end
 
+-- Claude code'un input kutusu her zaman düz çizgilerden (─/╭╮╰╯) bir border'la
+-- çizili. Cursor o border çiftinin İÇİNDE mi diye taze bakıp karar veriyoruz
+-- (flag/one-shot state yerine): C-d/C-u ile eski output'a gidip geri dönülse
+-- bile her i/a basışında yeniden hesaplanır, doğru sonuç verir.
+local _border_re = vim.regex([[^\s*[─═╭╮╰╯┌┐└┘]\+\s*$]])
+local function _line_is_border(lnum)
+  local text = vim.fn.getline(lnum)
+  if text == "" then
+    return false
+  end
+  return _border_re:match_str(text) ~= nil
+end
+local function _cursor_in_input_box()
+  local last = vim.fn.line("$")
+  local bottom
+  for l = last, math.max(1, last - 200), -1 do
+    if _line_is_border(l) then
+      bottom = l
+      break
+    end
+  end
+  if not bottom then
+    return false
+  end
+  local top
+  for l = bottom - 1, math.max(1, bottom - 200), -1 do
+    if _line_is_border(l) then
+      top = l
+      break
+    end
+  end
+  if not top then
+    return false
+  end
+  local cur = vim.fn.line(".")
+  return cur > top and cur < bottom
+end
+
 -- Terminal normal modda (<C-n> sonrası): claude code çalışıyorsa C-d/C-u/gg/G
 -- nvim buffer'ında scrollback gezmek yerine job'a yollansın; çalışmıyorsa
 -- (düz bash) nvim'in kendi default davranışına düşülür.
@@ -208,21 +246,38 @@ vim.api.nvim_create_autocmd("TermOpen", {
 
     -- i/a (langmapper ile ı/a): insert'e dönmeden önce gerçek imleci şu anki
     -- nvim cursor kolonuna taşı. a, i'nin bir sağına geçer (append semantiği).
+    -- SADECE cursor input kutusunun (border çizgileri arası) İÇİNDEYSE düzeltme
+    -- gönderilir. Aksi halde (gg/G/C-d/C-u ile eski output'a gidilip orda
+    -- kalınmışsa) delta göndermek gerçek Up/Down oluyordu -> claude code
+    -- input'unda Up = önceki prompt'u geri getiriyordu (bug). Kutu dışındaysa
+    -- düz startinsert (nvim zaten dibe kayar) + baseline dipte yeniden kaydedilir.
     vim.keymap.set("n", "i", function()
       if not _is_claude_running() then
         _fallback("i")
         return
       end
-      _real_cursor_goto(vim.fn.line("."), vim.fn.virtcol("."))
+      if _cursor_in_input_box() then
+        _real_cursor_goto(vim.fn.line("."), vim.fn.virtcol("."))
+      end
       vim.cmd("startinsert")
+      vim.schedule(function()
+        vim.b.term_cursor_line = vim.fn.line(".")
+        vim.b.term_cursor_vcol = vim.fn.virtcol(".")
+      end)
     end, map_opts)
     vim.keymap.set("n", "a", function()
       if not _is_claude_running() then
         _fallback("a")
         return
       end
-      _real_cursor_goto(vim.fn.line("."), vim.fn.virtcol(".") + 1)
+      if _cursor_in_input_box() then
+        _real_cursor_goto(vim.fn.line("."), vim.fn.virtcol(".") + 1)
+      end
       vim.cmd("startinsert")
+      vim.schedule(function()
+        vim.b.term_cursor_line = vim.fn.line(".")
+        vim.b.term_cursor_vcol = vim.fn.virtcol(".")
+      end)
     end, map_opts)
 
     -- x: cursor'daki karakteri gerçek input'ta sil (insert'e geçmez).
