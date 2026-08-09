@@ -52,9 +52,12 @@ local function _save_term_cursor_and_go_normal()
 end
 vim.keymap.set("t", "<C-n>", _save_term_cursor_and_go_normal, { expr = true, noremap = true })
 
--- Gerçek imleci (job'daki) hedef satır+ekran koluna taşı: kaydedilen pozisyonla
+-- Gerçek imleci (job'daki) hedef satır+ekran koluna taşır: kaydedilen pozisyonla
 -- hedef arasındaki farkı önce yukarı/aşağı, sonra sol/sağ ok byte'ı olarak
 -- gönderir, kaydı günceller. Çok satırlı input'ta satır atlamayı da destekler.
+-- Çağıran taraf sadece _cursor_in_input_box() true ise bunu çağırır -- kutu
+-- dışında (scrollback'te) kör delta göndermek Up/Down'ı claude'un prompt
+-- geçmişini/agent view'i tetikleyen kısayollara çeviriyordu.
 local function _real_cursor_goto(target_line, target_vcol)
   local chan = vim.b.terminal_job_id
   local saved_line = vim.b.term_cursor_line
@@ -66,10 +69,10 @@ local function _real_cursor_goto(target_line, target_vcol)
     local vseq = line_delta > 0 and "\x1b[A" or "\x1b[B" -- Up/Down
     vim.api.nvim_chan_send(chan, vseq:rep(math.abs(line_delta)))
   end
-  local delta = vim.b.term_cursor_vcol - target_vcol
-  if delta ~= 0 then
-    local seq = delta > 0 and "\x1b[D" or "\x1b[C"
-    vim.api.nvim_chan_send(chan, seq:rep(math.abs(delta)))
+  local col_delta = vim.b.term_cursor_vcol - target_vcol
+  if col_delta ~= 0 then
+    local seq = col_delta > 0 and "\x1b[D" or "\x1b[C"
+    vim.api.nvim_chan_send(chan, seq:rep(math.abs(col_delta)))
   end
   vim.b.term_cursor_line = target_line
   vim.b.term_cursor_vcol = target_vcol
@@ -247,10 +250,10 @@ vim.api.nvim_create_autocmd("TermOpen", {
     -- i/a (langmapper ile ı/a): insert'e dönmeden önce gerçek imleci şu anki
     -- nvim cursor kolonuna taşı. a, i'nin bir sağına geçer (append semantiği).
     -- SADECE cursor input kutusunun (border çizgileri arası) İÇİNDEYSE düzeltme
-    -- gönderilir. Aksi halde (gg/G/C-d/C-u ile eski output'a gidilip orda
-    -- kalınmışsa) delta göndermek gerçek Up/Down oluyordu -> claude code
-    -- input'unda Up = önceki prompt'u geri getiriyordu (bug). Kutu dışındaysa
-    -- düz startinsert (nvim zaten dibe kayar) + baseline dipte yeniden kaydedilir.
+    -- gönderilir (gg/G/C-d/C-u ile eski output'a gidilip orda kalınmışsa hiç
+    -- deneme -- kutu dışına kör delta göndermek Up/Down'ı önceki prompt/agent
+    -- view tetikleyicisine çeviriyordu). Kutu içindeyken eski (kanıtlanmış,
+    -- kör tek-seferlik) delta yöntemi kullanılır -- bkz. _real_cursor_goto notu.
     vim.keymap.set("n", "i", function()
       if not _is_claude_running() then
         _fallback("i")
@@ -260,10 +263,8 @@ vim.api.nvim_create_autocmd("TermOpen", {
         _real_cursor_goto(vim.fn.line("."), vim.fn.virtcol("."))
       end
       vim.cmd("startinsert")
-      vim.schedule(function()
-        vim.b.term_cursor_line = vim.fn.line(".")
-        vim.b.term_cursor_vcol = vim.fn.virtcol(".")
-      end)
+      vim.b.term_cursor_line = vim.fn.line(".")
+      vim.b.term_cursor_vcol = vim.fn.virtcol(".")
     end, map_opts)
     vim.keymap.set("n", "a", function()
       if not _is_claude_running() then
@@ -274,10 +275,8 @@ vim.api.nvim_create_autocmd("TermOpen", {
         _real_cursor_goto(vim.fn.line("."), vim.fn.virtcol(".") + 1)
       end
       vim.cmd("startinsert")
-      vim.schedule(function()
-        vim.b.term_cursor_line = vim.fn.line(".")
-        vim.b.term_cursor_vcol = vim.fn.virtcol(".")
-      end)
+      vim.b.term_cursor_line = vim.fn.line(".")
+      vim.b.term_cursor_vcol = vim.fn.virtcol(".")
     end, map_opts)
 
     -- x: cursor'daki karakteri gerçek input'ta sil (insert'e geçmez).
