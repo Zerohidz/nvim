@@ -304,6 +304,22 @@ if vim.g.neovide then
       vim.api.nvim_chan_send(chan, "\x1b[13;2u")
     end
   end, { noremap = true, silent = true, desc = "Shift+Enter → kitty sequence (terminal)" })
+
+  -- Zoom (font + pencere birlikte büyür/küçülür): neovide_scale_factor tüm
+  -- UI'yi ölçekliyor, numpad + gerektirmeyen <C-=>/<C--> art arda hızlı basılabilir.
+  local function _zoom(delta)
+    local scale = (vim.g.neovide_scale_factor or 1.0) + delta
+    vim.g.neovide_scale_factor = math.max(0.3, math.min(3.0, scale))
+  end
+  local zoom_opts = { noremap = true, silent = true }
+  vim.keymap.set({ "n", "i", "v", "t" }, "<C-=>", function() _zoom(0.05) end,
+    vim.tbl_extend("force", zoom_opts, { desc = "Neovide zoom in" }))
+  vim.keymap.set({ "n", "i", "v", "t" }, "<C-*>", function() _zoom(0.05) end,
+    vim.tbl_extend("force", zoom_opts, { desc = "Neovide zoom in" }))
+  vim.keymap.set({ "n", "i", "v", "t" }, "<C-->", function() _zoom(-0.05) end,
+    vim.tbl_extend("force", zoom_opts, { desc = "Neovide zoom out" }))
+  vim.keymap.set({ "n", "i", "v", "t" }, "<C-0>", function() vim.g.neovide_scale_factor = 0.95 end,
+    vim.tbl_extend("force", zoom_opts, { desc = "Neovide zoom reset" }))
 end
 
 
@@ -316,3 +332,9 @@ vim.keymap.set('n', '<leader>yp', function()
   vim.fn.setreg('+', relative_path)
   print("Kopyalanan yol (CWD): " .. relative_path)
 end, { desc = 'Dosya yolunu kopyala' })
+
+
+-- Manual
+vim.keymap.set('n', '<leader>k', function()
+  vim.cmd('Man ' .. vim.fn.expand('<cword>'))
+end, { desc = 'Open man page for word under cursor' })

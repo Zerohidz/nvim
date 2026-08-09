@@ -23,7 +23,7 @@ if vim.g.neovide then
     font = "CaskaydiaMono Nerd Font Mono"
   end
   vim.o.guifont = font .. ":h10"
-  vim.g.neovide_scale_factor = 0.95
+  vim.g.neovide_scale_factor = 1.05
   vim.g.neovide_opacity = 0.95
   vim.g.neovide_padding_top = 30
   vim.g.neovide_padding_bottom = 30
