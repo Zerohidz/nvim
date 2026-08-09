@@ -1,5 +1,6 @@
--- Disabled: colorscheme bg colors shown everywhere (terminal + Neovide)
-do return end
+if vim.g.neovide then
+	return
+end
 
 -- Make highlight groups transparent while preserving their other attributes
 local function make_transparent(name)
