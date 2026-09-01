@@ -61,4 +61,3 @@
   "unified.nvim": { "branch": "main", "commit": "66456c9fa737a427544ed3b584fd0cb913888355" },
   "which-key.nvim": { "branch": "main", "commit": "3aab2147e74890957785941f0c1ad87d0a44c15a" }
 }
-
