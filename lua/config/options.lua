@@ -4,6 +4,13 @@ require("config.remote_clipboard").setup()
 -- Add any additional options here
 vim.opt.relativenumber = false
 
+-- Global indent: 4 boşluk (LazyVim default'u 2). Java dahil tüm dosyalar için geçerli;
+-- jdtls formatlarken de shiftwidth'i tabSize olarak kullanır.
+vim.opt.shiftwidth = 4
+vim.opt.tabstop = 4
+vim.opt.softtabstop = 4
+vim.opt.expandtab = true
+
 -- unnamedplus: y (normal+visual) otomatik sistem panosuna gider.
 -- x/d/c/s (normal+visual) init.lua'da blackhole ("_) register'a map'li,
 -- bu yüzden clipboard opt'undan etkilenmezler — hiçbir yere yazmazlar.
