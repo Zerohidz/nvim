@@ -151,8 +151,18 @@ local function _is_claude_running()
   if not ok or not pid then
     return false
   end
-  local ok2, out = pcall(vim.fn.system, { "ps", "--ppid", tostring(pid), "-o", "args=" })
-  return ok2 and out:find("claude") ~= nil
+  -- `ps --ppid` GNU'ya özel (macOS BSD ps'te yok); bu form ikisinde de çalışır.
+  local ok2, out = pcall(vim.fn.system, { "ps", "-A", "-o", "ppid=,args=" })
+  if not ok2 then
+    return false
+  end
+  for line in out:gmatch("[^\n]+") do
+    local ppid, args = line:match("^%s*(%d+)%s+(.*)$")
+    if tonumber(ppid) == pid and args:find("claude") then
+      return true
+    end
+  end
+  return false
 end
 
 -- Bir tuşu default nvim davranışına (remap edilmeden) geri besler.
