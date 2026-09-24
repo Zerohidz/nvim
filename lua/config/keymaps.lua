@@ -382,8 +382,8 @@ if vim.g.neovide then
     vim.tbl_extend("force", zoom_opts, { desc = "Neovide zoom in" }))
   vim.keymap.set({ "n", "i", "v", "t" }, "<C-->", function() _zoom(-0.05) end,
     vim.tbl_extend("force", zoom_opts, { desc = "Neovide zoom out" }))
-  vim.keymap.set({ "n", "i", "v", "t" }, "<C-0>", function() vim.g.neovide_scale_factor = 0.95 end,
-    vim.tbl_extend("force", zoom_opts, { desc = "Neovide zoom reset" }))
+  vim.keymap.set({ "n", "i", "v", "t" }, "<C-0>", "<cmd>NeovideFitScale<CR>",
+    vim.tbl_extend("force", zoom_opts, { desc = "Neovide fit scale to display" }))
 end
 
 

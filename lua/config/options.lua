@@ -30,7 +30,30 @@ if vim.g.neovide then
     font = "CaskaydiaMono Nerd Font Mono"
   end
   vim.o.guifont = font .. ":h10"
-  vim.g.neovide_scale_factor = 1.05
+
+  -- Ekran'a göre scale: Retina/HiDPI (OS scale >= 2) -> 1.8, 1x monitor (1080p vb.) -> 1.05
+  -- Referans: menubar'li ana ekran (JXA). Pencereyi 1x monitörde kullanacaksan onu
+  -- ana ekran yap; tek tuşla düzeltme: <C-0> (NeovideFitScale), ince ayar <C-*>/<C-->.
+  -- Not: scale sadece acilista (VimEnter) uygulanir; pencere/split degisimlerinde
+  -- (orn. neo-tree acilisi) resetlenmez, manuel zoom korunur.
+  local RETINA_SCALE = 1.8
+  local FHD_SCALE = 1.05
+  local function fit_display_scale()
+    local ok, out = pcall(vim.fn.system, {
+      "osascript",
+      "-l",
+      "JavaScript",
+      "-e",
+      [[ObjC.import("Cocoa"); String($.NSScreen.screens.objectAtIndex(0).backingScaleFactor)]],
+    })
+    local sf = ok and tonumber((out or ""):match("%d+%.?%d*"))
+    if sf then
+      vim.g.neovide_scale_factor = sf >= 2 and RETINA_SCALE or FHD_SCALE
+    end
+  end
+  vim.g.neovide_scale_factor = RETINA_SCALE -- acilis defaultu; VimEnter'da duzeltildi
+  vim.api.nvim_create_user_command("NeovideFitScale", fit_display_scale, {})
+  vim.api.nvim_create_autocmd("VimEnter", { once = true, callback = fit_display_scale })
   vim.g.neovide_opacity = 0.95
   vim.g.neovide_padding_top = 30
   vim.g.neovide_padding_bottom = 30
