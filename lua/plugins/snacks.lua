@@ -6,6 +6,8 @@ return {
         input = {
           keys = {
             ["<C-l>"] = { "focus_preview", mode = { "i", "n" } },
+            -- / aramasıyla tutarlı: düz metin <-> regex geçişi (default <a-r> de çalışır)
+            ["<C-x>"] = { "toggle_regex", mode = { "i", "n" } },
           },
         },
         list = {
@@ -21,6 +23,8 @@ return {
         },
       },
       sources = {
+        -- <leader>sg: default düz metin (rg --fixed-strings), regex için <C-x>
+        grep = { regex = false },
         files = {
           hidden = true,
           ignored = false,

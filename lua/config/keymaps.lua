@@ -402,3 +402,48 @@ end, { desc = 'Dosya yolunu kopyala' })
 vim.keymap.set('n', '<leader>k', function()
   vim.cmd('Man ' .. vim.fn.expand('<cword>'))
 end, { desc = 'Open man page for word under cursor' })
+
+-- Arama: default düz metin (\V = very nomagic, sadece \ özel kalır).
+-- . (langmap → /) ve : (langmap → ?) da bu map'lere düşer.
+vim.keymap.set({ "n", "x", "o" }, "/", [[/\V]], { desc = "Search forward (literal)" })
+vim.keymap.set({ "n", "x", "o" }, "?", [[?\V]], { desc = "Search backward (literal)" })
+
+-- Arama satırındayken <C-x>: düz metin <-> regex arası geçiş (baştaki \V'yi
+-- ekler/kaldırır, imleç yazdığın yerde kalır).
+vim.keymap.set("c", "<C-x>", function()
+  local t = vim.fn.getcmdtype()
+  if t ~= "/" and t ~= "?" then
+    return
+  end
+  local line, pos = vim.fn.getcmdline(), vim.fn.getcmdpos()
+  if line:sub(1, 2) == [[\V]] then
+    vim.fn.setcmdline(line:sub(3), math.max(1, pos - 2))
+  else
+    vim.fn.setcmdline([[\V]] .. line, pos + 2)
+  end
+end, { desc = "Toggle literal/regex search" })
+
+-- mini.pairs arama satırında ( [ { " ' kapatmasın (: komut satırında aynen devam).
+-- LazyVim'in <leader>up toggle'ı vim.g'yi kullanıyor, onu bozmamak için buffer
+-- değişkeni kullanıp çıkışta eski değeri geri koyuyoruz.
+vim.api.nvim_create_autocmd("CmdlineEnter", {
+  pattern = { "/", "?" },
+  callback = function()
+    vim.b._minipairs_prev = vim.b.minipairs_disable
+    vim.b.minipairs_disable = true
+  end,
+})
+vim.api.nvim_create_autocmd("CmdlineLeave", {
+  pattern = { "/", "?" },
+  callback = function()
+    vim.b.minipairs_disable = vim.b._minipairs_prev
+    vim.b._minipairs_prev = nil
+  end,
+})
+-- <leader>sg (snacks picker input) ve <leader>sr (grug-far) arama kutularında da.
+vim.api.nvim_create_autocmd("FileType", {
+  pattern = { "snacks_picker_input", "grug-far" },
+  callback = function()
+    vim.b.minipairs_disable = true
+  end,
+})
