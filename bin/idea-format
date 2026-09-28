@@ -1,0 +1,28 @@
+#!/usr/bin/env bash
+# idea-format <kod-stili.xml> <dosya>: dosyayı IntelliJ ile yerinde formatlar.
+# Önce açık IDE'deki "Nvim Format Bridge" plugin'ine sorar (hızlı; dosyanın projesi IDE'de açıksa, projenin kod stiliyle).
+# IDE kapalıysa, plugin yoksa ya da proje açık değilse `idea format` komut satırına düşer (~2.5 sn, verilen kod stiliyle).
+# Komut satırı, açık IDE ile çakışmasın diye IDEA_PROPERTIES ile ayrı config/system dizinleri kullanır.
+# Her çağrı ~/.cache/nvim/intellij-format/idea-format.log'a yazılır (süre ve hangi yolun kullanıldığı).
+style=$1
+file=$2
+log="$HOME/.cache/nvim/intellij-format/idea-format.log"
+mkdir -p "$(dirname "$log")"
+start=$(perl -MTime::HiRes=time -e 'printf "%.3f", time')
+elapsed() { perl -MTime::HiRes=time -e "printf '%.3f', time - $start"; }
+
+# IDE'nin yerleşik sunucusu 63342'den başlar; birden fazla JetBrains IDE açıksa sonraki portlara kayar
+tried=""
+for port in 63342 63343 63344 63345; do
+  status=$(curl -s -o /dev/null -w '%{http_code}' --max-time 10 --data-urlencode "path=$file" "http://127.0.0.1:$port/api/nvim-format")
+  tried="$tried $port:$status"
+  if [ "$status" = 200 ]; then
+    echo "$(date '+%F %T') plugin ${tried# } $(elapsed)s $(basename "$file")" >> "$log"
+    exit 0
+  fi
+done
+
+"/Applications/IntelliJ IDEA.app/Contents/MacOS/idea" format -s "$style" "$file"
+code=$?
+echo "$(date '+%F %T') cli(exit=$code) ${tried# } $(elapsed)s $(basename "$file")" >> "$log"
+exit $code

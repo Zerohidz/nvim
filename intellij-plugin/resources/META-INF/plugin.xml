@@ -1,0 +1,15 @@
+<idea-plugin>
+    <id>local.nvim-format</id>
+    <name>Nvim Format Bridge</name>
+    <version>1.0</version>
+    <vendor>local</vendor>
+    <description><![CDATA[
+        nvim (conform.nvim) için: POST /api/nvim-format ile gelen dosyayı açık IDE'de, projesinin kod stiliyle formatlar.
+        Kaynak ve kurulum: ~/.config/nvim/intellij-plugin
+    ]]></description>
+    <depends>com.intellij.modules.platform</depends>
+    <depends>com.intellij.modules.lang</depends>
+    <extensions defaultExtensionNs="com.intellij">
+        <httpRequestHandler implementation="nvimformat.NvimFormatHandler"/>
+    </extensions>
+</idea-plugin>

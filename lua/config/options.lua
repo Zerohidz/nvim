@@ -11,6 +11,9 @@ vim.opt.tabstop = 4
 vim.opt.softtabstop = 4
 vim.opt.expandtab = true
 
+-- Dosya sonunda newline yoksa ekleme (IntelliJ default'u gibi); aksi halde her kayıtta gereksiz diff çıkıyor
+vim.opt.fixendofline = false
+
 -- unnamedplus: y (normal+visual) otomatik sistem panosuna gider.
 -- x/d/c/s (normal+visual) init.lua'da blackhole ("_) register'a map'li,
 -- bu yüzden clipboard opt'undan etkilenmezler — hiçbir yere yazmazlar.

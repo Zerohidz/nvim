@@ -387,6 +387,16 @@ if vim.g.neovide then
 end
 
 
+-- <leader>cf: IntelliJ ile formatlanan projelerde (config/format_projects.lua) async — IntelliJ birkaç saniye
+-- sürebilir, nvim donmasın; beklerken dosya değişirse conform sonucu uygulamaz. Diğerlerinde LazyVim default'u.
+vim.keymap.set("n", "<leader>cf", function()
+  if require("config.format_projects").get(vim.api.nvim_buf_get_name(0)) then
+    require("conform").format({ async = true })
+  else
+    LazyVim.format({ force = true })
+  end
+end, { desc = "Format" })
+
 -- Sadece dosya adını kopyalar (Örn: index.js)
 vim.keymap.set('n', '<leader>yf', "<cmd>let @+ = expand('%:t')<CR>", { desc = 'Dosya adını kopyala' })
 
