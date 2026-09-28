@@ -1,22 +1,5 @@
 local idea = "/Applications/IntelliJ IDEA.app/Contents/MacOS/idea"
 
--- `idea format` açık bir IDE varken "Only one instance" hatası verir; ayrı config/system dizinleriyle çalıştır
-local function idea_properties()
-  local dir = vim.fn.stdpath("cache") .. "/intellij-format"
-  local file = dir .. "/idea.properties"
-  if vim.fn.filereadable(file) == 0 then
-    for _, sub in ipairs({ "config", "system", "log" }) do
-      vim.fn.mkdir(dir .. "/" .. sub, "p")
-    end
-    vim.fn.writefile({
-      "idea.config.path=" .. dir .. "/config",
-      "idea.system.path=" .. dir .. "/system",
-      "idea.log.path=" .. dir .. "/log",
-    }, file)
-  end
-  return file
-end
-
 return {
   "stevearc/conform.nvim",
   opts = function(_, opts)
@@ -39,9 +22,6 @@ return {
         return { require("config.format_projects").get(ctx.filename).style, "$FILENAME" }
       end,
       stdin = false,
-      env = function()
-        return { IDEA_PROPERTIES = idea_properties() }
-      end,
       condition = function(_, ctx)
         return vim.fn.executable(idea) == 1 and require("config.format_projects").get(ctx.filename) ~= nil
       end,
