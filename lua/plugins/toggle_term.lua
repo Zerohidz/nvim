@@ -14,6 +14,13 @@ return {
       insert_mappings = false,
       terminal_mappings = false,
 
+      -- Closing the terminal redistributes split heights; restore DB results afterwards.
+      on_close = function()
+        vim.schedule(function()
+          require("config.database_results").restore_height()
+        end)
+      end,
+
       -- Terminal her açıldığında burası tetiklenir
       on_open = function(term)
         -- Eğer açılan terminal 1 numaralı (<C-t>) terminal ise:
