@@ -41,7 +41,12 @@ if vim.g.neovide then
   -- (orn. neo-tree acilisi) resetlenmez, manuel zoom korunur.
   local RETINA_SCALE = 1.8
   local FHD_SCALE = 1.05
+  local LINUX_SCALE = 1.20 -- osascript yok; Linux'ta sabit scale (Hyprland kendi ölçekliyor)
   local function fit_display_scale()
+    if vim.fn.has("mac") == 0 then
+      vim.g.neovide_scale_factor = LINUX_SCALE
+      return
+    end
     local ok, out = pcall(vim.fn.system, {
       "osascript",
       "-l",
@@ -54,7 +59,7 @@ if vim.g.neovide then
       vim.g.neovide_scale_factor = sf >= 2 and RETINA_SCALE or FHD_SCALE
     end
   end
-  vim.g.neovide_scale_factor = RETINA_SCALE -- acilis defaultu; VimEnter'da duzeltildi
+  vim.g.neovide_scale_factor = vim.fn.has("mac") == 1 and RETINA_SCALE or LINUX_SCALE -- acilis defaultu; VimEnter'da duzeltildi
   vim.api.nvim_create_user_command("NeovideFitScale", fit_display_scale, {})
   vim.api.nvim_create_autocmd("VimEnter", { once = true, callback = fit_display_scale })
   vim.g.neovide_opacity = 0.95
