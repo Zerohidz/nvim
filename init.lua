@@ -88,3 +88,6 @@ vim.api.nvim_create_autocmd({ "BufEnter", "BufWinEnter" }, {
     vim.opt_local.spell = false
   end,
 })
+
+-- Conceal level (sembolizasyon)
+vim.opt.conceallevel = 1
