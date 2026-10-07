@@ -42,6 +42,7 @@ vim.keymap.set({ "n", "x", "o" }, "ğv", _sw_prev, { desc = "Prev subword" })
 
 -- Terminal
 local opts = { noremap = true, silent = true }
+local terminal_agent = require("config.terminal_agent")
 -- Mod değişmeden ÖNCE gerçek imleç kolonunu kaydet: t->n geçişinde nvim
 -- cursor satır sonundaysa (gap pozisyonu) son karaktere clamp ediyor,
 -- geçiş SONRASI okumak 1 kayık pozisyon veriyordu.
@@ -214,12 +215,17 @@ end
 -- claude code: Ctrl+D/Ctrl+U scroll:halfPage (~/.claude/keybindings.json),
 -- gg/G için Ctrl+Home/Ctrl+End default (scroll:top/bottom).
 vim.api.nvim_create_autocmd("TermOpen", {
-  desc = "Terminal normal modda C-d/C-u/gg/G'yi (claude çalışıyorsa) job'a forward et",
+  desc = "Terminal normal navigation: Claude/Codex native scroll and search",
   callback = function(args)
-    -- Hem nvim'in kendi scrollback davranışı hem (claude çalışıyorsa) job'a
-    -- forward: ikisi çakışmıyor, ikisi de olsun.
+    -- Codex fullscreen transcript sadece job üzerinde kaydırılır. Claude
+    -- mevcut scrollback + job davranışını, shell Neovim defaults'ı korur.
     local send = function(bytes, fallback_keys)
       return function()
+        if terminal_agent.is_codex_running() then
+          vim.api.nvim_chan_send(vim.b.terminal_job_id, bytes)
+          vim.defer_fn(function() vim.cmd("redraw!") end, 80)
+          return
+        end
         _fallback(fallback_keys)
         if _is_claude_running() then
           local chan = vim.b.terminal_job_id
@@ -233,6 +239,70 @@ vim.api.nvim_create_autocmd("TermOpen", {
       end
     end
     local map_opts = { buffer = args.buf, noremap = true, silent = true }
+    local function clear_codex_search()
+      vim.b.codex_search_pid = nil
+      vim.b.codex_search_phase = nil
+    end
+    vim.api.nvim_create_autocmd("TermClose", {
+      buffer = args.buf,
+      once = true,
+      callback = function()
+        vim.b[args.buf].codex_search_pid = nil
+        vim.b[args.buf].codex_search_phase = nil
+      end,
+    })
+    local function codex_search_active()
+      if not vim.b.codex_search_pid then
+        return false
+      end
+      if terminal_agent.codex_pid() ~= vim.b.codex_search_pid then
+        clear_codex_search()
+        return false
+      end
+      return true
+    end
+    local function close_codex_search(bytes)
+      if not codex_search_active() then
+        return false
+      end
+      vim.api.nvim_chan_send(vim.b.terminal_job_id, bytes)
+      clear_codex_search()
+      return true
+    end
+    for lhs, bytes in pairs({ n = "\r", N = "\x10" }) do
+      vim.keymap.set("n", lhs, function()
+        if codex_search_active() then
+          vim.b.codex_search_phase = "navigate"
+          vim.api.nvim_chan_send(vim.b.terminal_job_id, bytes)
+        else
+          _fallback(lhs)
+        end
+      end, map_opts)
+    end
+    vim.keymap.set("n", "q", function()
+      if not close_codex_search("\x1b") then _fallback("q") end
+    end, map_opts)
+    vim.keymap.set("n", "<Esc>", function()
+      if not close_codex_search("\x1b") then _fallback("<Esc>") end
+    end, map_opts)
+    local terminal_expr_opts = { buffer = args.buf, expr = true, noremap = true }
+    vim.keymap.set("t", "<CR>", function()
+      if codex_search_active() then
+        -- Search is incremental: accepting switches the host to navigation;
+        -- sending Enter here would skip the first match.
+        vim.b.codex_search_phase = "navigate"
+        return vim.api.nvim_replace_termcodes([[<C-\><C-n>]], true, true, true)
+      end
+      return "\r"
+    end, terminal_expr_opts)
+    for lhs, bytes in pairs({ ["<Esc>"] = "\x1b", ["<C-c>"] = "\x03" }) do
+      vim.keymap.set("t", lhs, function()
+        if close_codex_search(bytes) then
+          return vim.api.nvim_replace_termcodes([[<C-\><C-n>]], true, true, true)
+        end
+        return bytes
+      end, terminal_expr_opts)
+    end
     -- Ctrl+D/Ctrl+U yerine PageDown/PageUp: claude code'da bunlar zaten
     -- default halfPage scroll yapıyor, Ctrl+U'yu input kill-line için
     -- serbest bırakıyoruz (Scroll context modsuz aktif, çakışıyordu).
@@ -245,6 +315,11 @@ vim.api.nvim_create_autocmd("TermOpen", {
     -- (input'u silmesin diye) app:redraw'ı ~/.claude/keybindings.json'da
     -- boş duran Ctrl+F'e bağladık, onu gönderiyoruz.
     vim.keymap.set("n", "G", function()
+      if terminal_agent.is_codex_running() then
+        vim.api.nvim_chan_send(vim.b.terminal_job_id, "\x1b[1;5F")
+        vim.defer_fn(function() vim.cmd("redraw!") end, 80)
+        return
+      end
       _fallback("G")
       if _is_claude_running() then
         local chan = vim.b.terminal_job_id
@@ -262,9 +337,17 @@ vim.api.nvim_create_autocmd("TermOpen", {
     -- claude'un transcript modunu (Ctrl+o) açıp kendi aramasını (/) başlat ve
     -- terminal moduna geç ki yazılanlar claude'a gitsin (Enter kabul, n/N, q çıkış).
     -- tmux'taki karşılığı: ~/.config/tmux/tmux.conf claude-nav ".".
-    vim.keymap.set("n", "/", function()
+    local search = function(fallback_keys)
+      local codex_pid = terminal_agent.codex_pid()
+      if codex_pid then
+        vim.b.codex_search_pid = codex_pid
+        vim.b.codex_search_phase = "query"
+        vim.api.nvim_chan_send(vim.b.terminal_job_id, "\x1bOR") -- F3: native fullscreen search
+        vim.cmd("startinsert")
+        return
+      end
       if not _is_claude_running() then
-        _fallback([[/\V]])
+        _fallback(fallback_keys)
         return
       end
       local chan = vim.b.terminal_job_id
@@ -273,7 +356,10 @@ vim.api.nvim_create_autocmd("TermOpen", {
         vim.api.nvim_chan_send(chan, "/")
       end, 50)
       vim.cmd("startinsert")
-    end, map_opts)
+    end
+    vim.keymap.set("n", "/", function() search([[/\V]]) end, map_opts)
+    -- Direct dot works even when langmap is disabled. Shell retains repeat.
+    vim.keymap.set("n", ".", function() search(".") end, map_opts)
 
     -- i/a (langmapper ile ı/a): insert'e dönmeden önce gerçek imleci şu anki
     -- nvim cursor kolonuna taşı. a, i'nin bir sağına geçer (append semantiği).
@@ -283,6 +369,11 @@ vim.api.nvim_create_autocmd("TermOpen", {
     -- view tetikleyicisine çeviriyordu). Kutu içindeyken eski (kanıtlanmış,
     -- kör tek-seferlik) delta yöntemi kullanılır -- bkz. _real_cursor_goto notu.
     vim.keymap.set("n", "i", function()
+      if terminal_agent.is_codex_running() then
+        if codex_search_active() then vim.b.codex_search_phase = "query" end
+        vim.cmd("startinsert")
+        return
+      end
       if not _is_claude_running() then
         _fallback("i")
         return
@@ -295,6 +386,11 @@ vim.api.nvim_create_autocmd("TermOpen", {
       vim.b.term_cursor_vcol = vim.fn.virtcol(".")
     end, map_opts)
     vim.keymap.set("n", "a", function()
+      if terminal_agent.is_codex_running() then
+        if codex_search_active() then vim.b.codex_search_phase = "query" end
+        vim.cmd("startinsert")
+        return
+      end
       if not _is_claude_running() then
         _fallback("a")
         return
