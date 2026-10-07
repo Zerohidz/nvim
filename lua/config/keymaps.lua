@@ -352,11 +352,13 @@ if vim.g.neovide then
   end
   -- Super+V (Hyprland → Shift+Insert olarak gelir)
   vim.keymap.set({ "n", "v", "i", "c", "t" }, "<S-Insert>", paste, { noremap = true, silent = true, desc = "Paste (Neovide)" })
+  -- Super+C (Hyprland → Ctrl+Insert olarak gelir): seçimi sistem panosuna kopyala
+  vim.keymap.set("v", "<C-Insert>", '"+y', { noremap = true, silent = true, desc = "Copy (Neovide)" })
 
-  -- Omarchy universal clipboard, Neovide'yi terminal sınıfı saymıyor (class=neovide,
-  -- clipboard.lua'daki terminal_classes listesinde yok) → Super+V burda Shift+Insert
-  -- değil CTRL+V yolluyor. n/i/v/c'de CTRL+V zaten Neovide GUI paste'iyle çalışıyor,
-  -- ama toggleterm'in "t" modunda CTRL+V job'a ^V byte'ı olarak gidiyordu, paste olmuyordu.
+  -- Super+V'nin Shift+Insert olarak gelmesi, ~/.config/hypr/hyprland.lua'da neovide'ye
+  -- "terminal" tag'i verilmesine bağlı (Omarchy universal clipboard tag'e bakıyor).
+  -- Tag yoksa Ctrl+V gelir. toggleterm'in "t" modunda Ctrl+V job'a ^V olarak gidiyordu,
+  -- bu map orada da paste yapsın diye.
   vim.keymap.set("t", "<C-v>", paste, { noremap = true, silent = true, desc = "Paste (Neovide terminal mode)" })
 
   -- Shift+Enter: insert modda normal newline
