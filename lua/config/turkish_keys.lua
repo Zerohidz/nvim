@@ -1,7 +1,8 @@
 -- lua/config/turkish_keys.lua
 local M = {}
 
-function M.setup()
+-- langmapper setup'ından önce seçenekleri hazırla; keymap/hook'lar sonra kurulur.
+function M.setup_langmap()
   vim.opt.langremap = false
 
   local function escape(str)
@@ -35,6 +36,12 @@ function M.setup()
   end
 
   vim.opt.langmap = table.concat(pairs_list, ",")
+end
+
+function M.setup()
+  if M._configured then return end
+  M._configured = true
+  M.setup_langmap()
 
   -- Textobject düzeltmesi:
   -- Hızlı yazınca langmap textobject'in 2. karakterini (İ, Ğ, vs.) çevirmiyor.
@@ -76,9 +83,8 @@ function M.setup()
     [","] = "\\", [";"] = "|",
   }
 
-  local function fix_macro_register(reg)
-    local macro = vim.fn.getreg(reg)
-    if macro == "" then return end
+  local function normalize_macro(macro)
+    if macro == "" then return "" end
 
     local function lmap(c) return tr_to_en_macro[c] or c end
 
@@ -152,13 +158,33 @@ function M.setup()
       end
     end
 
-    vim.fn.setreg(reg, table.concat(result))
+    return table.concat(result)
   end
 
+  local pending = {}
   vim.api.nvim_create_autocmd("RecordingLeave", {
+    group = vim.api.nvim_create_augroup("TurkishMacroRecording", { clear = true }),
     callback = function()
       local reg = vim.v.event.regname
-      vim.schedule(function() fix_macro_register(reg) end)
+      local macro = vim.v.event.regcontents
+      local target = reg:lower()
+      -- RecordingLeave register commit'inden önce çalışır. Append prefix'ini
+      -- şimdi al; aynı input batch'inde önceki kayıt henüz normalize olmayabilir.
+      local prefix = reg ~= target and vim.fn.getreg(target) or ""
+      local normalized_prefix = prefix
+      if pending[target] and pending[target].raw == prefix then
+        normalized_prefix = pending[target].normalized
+      end
+      local entry = { raw = prefix .. macro, normalized = normalized_prefix .. normalize_macro(macro) }
+      pending[target] = entry
+      vim.schedule(function()
+        -- Eski callback yeni kaydı veya sonradan değiştirilmiş register'ı ezmez.
+        if pending[target] ~= entry then return end
+        pending[target] = nil
+        if vim.fn.getreg(target) == entry.raw then
+          vim.fn.setreg(target, entry.normalized)
+        end
+      end)
     end,
   })
 end

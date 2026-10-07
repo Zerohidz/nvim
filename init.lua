@@ -3,10 +3,13 @@
 vim.g.loaded_netrw = 1
 vim.g.loaded_netrwPlugin = 1
 
+-- langmapper, mapping varyantlarını oluştururken langmap'i okumalı.
+require("config.turkish_keys").setup_langmap()
+
 -- bootstrap lazy.nvim, LazyVim and your plugins
 require("config.lazy")
 
--- Türkçe klavye düzeltmesini yükle
+-- Türkçe keymap ve makro hook'larını plugin setup'ından sonra yükle.
 require("config.turkish_keys").setup()
 
 -- #############################################################################
