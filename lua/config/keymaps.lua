@@ -257,6 +257,24 @@ vim.api.nvim_create_autocmd("TermOpen", {
       end
     end, map_opts)
 
+    -- / (langmapper ile .): claude fullscreen'de konuşma alternate screen'de, nvim
+    -- buffer'ında scrollback yok → nvim araması bir şey bulamıyor. Onun yerine
+    -- claude'un transcript modunu (Ctrl+o) açıp kendi aramasını (/) başlat ve
+    -- terminal moduna geç ki yazılanlar claude'a gitsin (Enter kabul, n/N, q çıkış).
+    -- tmux'taki karşılığı: ~/.config/tmux/tmux.conf claude-nav ".".
+    vim.keymap.set("n", "/", function()
+      if not _is_claude_running() then
+        _fallback([[/\V]])
+        return
+      end
+      local chan = vim.b.terminal_job_id
+      vim.api.nvim_chan_send(chan, "\x0f") -- Ctrl+O -> transcript mode
+      vim.defer_fn(function()
+        vim.api.nvim_chan_send(chan, "/")
+      end, 50)
+      vim.cmd("startinsert")
+    end, map_opts)
+
     -- i/a (langmapper ile ı/a): insert'e dönmeden önce gerçek imleci şu anki
     -- nvim cursor kolonuna taşı. a, i'nin bir sağına geçer (append semantiği).
     -- SADECE cursor input kutusunun (border çizgileri arası) İÇİNDEYSE düzeltme
