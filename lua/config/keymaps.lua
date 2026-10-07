@@ -368,6 +368,8 @@ if vim.g.neovide then
   local function paste()
     vim.api.nvim_paste(vim.fn.getreg("+"), true, -1)
   end
+  -- macOS: Command+V, Neovide tarafından <D-v> olarak iletilir.
+  vim.keymap.set({ "n", "v", "i", "c", "t" }, "<D-v>", paste, { noremap = true, silent = true, desc = "Paste (Neovide)" })
   -- Super+V (Hyprland → Shift+Insert olarak gelir)
   vim.keymap.set({ "n", "v", "i", "c", "t" }, "<S-Insert>", paste, { noremap = true, silent = true, desc = "Paste (Neovide)" })
   -- Super+C (Hyprland → Ctrl+Insert olarak gelir): seçimi sistem panosuna kopyala
