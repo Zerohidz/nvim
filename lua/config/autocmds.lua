@@ -51,3 +51,36 @@ vim.api.nvim_create_autocmd("BufAdd", {
 		end
 	end,
 })
+
+-- persistence.nvim çıkışta oturumu kaydederken geçici klasördeki dosyaları (nvim /tmp/x.xml,
+-- test/script çalıştırmaları) arglist'e ve buffer listesine yazıyor; sonraki açılışta o dosya
+-- (ör. t.xml) hayalet buffer olarak geri geliyordu. Kayıttan hemen önce bunları ayıkla.
+-- Başsız (UI'sız) çalıştırmalar gerçek oturumu ezmesin diye hiç buffer bırakma
+-- (persistence boş oturumu kaydetmez, need=1).
+vim.api.nvim_create_autocmd("User", {
+	group = vim.api.nvim_create_augroup("persistence_skip_temp", { clear = true }),
+	pattern = "PersistenceSavePre",
+	callback = function()
+		local headless = #vim.api.nvim_list_uis() == 0
+		local temp_roots = { "/tmp/", "/private/tmp/", "/var/folders/", "/private/var/folders/" }
+		if vim.env.TMPDIR and vim.env.TMPDIR ~= "" then
+			table.insert(temp_roots, (vim.env.TMPDIR:gsub("/*$", "/")))
+		end
+		local function is_temp(name)
+			for _, root in ipairs(temp_roots) do
+				if name:sub(1, #root) == root then return true end
+			end
+			return false
+		end
+		for _, arg in ipairs(vim.fn.argv()) do
+			local full = vim.fn.fnamemodify(arg, ":p")
+			if headless or is_temp(full) then pcall(vim.cmd, "silent! argdelete " .. vim.fn.fnameescape(arg)) end
+		end
+		for _, buf in ipairs(vim.api.nvim_list_bufs()) do
+			local name = vim.api.nvim_buf_get_name(buf)
+			if name ~= "" and (headless or is_temp(name)) then
+				pcall(vim.api.nvim_buf_delete, buf, { force = true })
+			end
+		end
+	end,
+})

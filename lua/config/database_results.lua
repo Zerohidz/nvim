@@ -80,14 +80,57 @@ function M.toggle()
   end
 end
 
--- FK atlama geçmişi: her atlamadan önceki sorgu (dosyası) ve görünümü saklanır, <C-t> ile geri dönülür.
+-- FK atlama geçmişi: her atlamadan önceki sorgu (dosyası), görünümü ve imlecin hangi kayıtta /
+-- ekranda nerede olduğu saklanır; <C-t> ile geri dönülünce aynı yere oturtulur.
 local history = {}
--- Sıradaki sonuç gelince: geçmişe ekle (push) ve/veya detay görünüme çevir (expanded).
+-- Sıradaki sonuç gelince: geçmişe ekle (push), detay görünüme çevir (expanded), imleci oturt (restore/focus).
 local after_result
 
 local function arm(opts)
   opts.t = vim.uv.now()
   after_result = opts
+end
+
+-- İmlecin bulunduğu kayıt (block/row), kayıt içindeki satır farkı ve ekran kayması.
+local function snapshot(buf)
+  local cursor = vim.api.nvim_win_get_cursor(0)
+  local selected
+  for _, record in ipairs(records(vim.api.nvim_buf_get_lines(buf, 0, -1, false), expanded(buf))) do
+    if record.line > cursor[1] then break end
+    selected = record
+  end
+  if not selected then return nil end
+  return {
+    block = selected.block, row = selected.row, off = cursor[1] - selected.line,
+    col = cursor[2], scroll = cursor[1] - vim.fn.line("w0"),
+  }
+end
+
+local function restore(buf, snap)
+  local win = vim.fn.win_findbuf(buf)[1]
+  if not win then return end
+  local lines = vim.api.nvim_buf_get_lines(buf, 0, -1, false)
+  for _, record in ipairs(records(lines, expanded(buf))) do
+    if record.block == snap.block and record.row == snap.row then
+      local line = math.min(record.line + snap.off, #lines)
+      vim.api.nvim_win_call(win, function()
+        vim.fn.winrestview({ lnum = line, col = snap.col, topline = math.max(1, line - snap.scroll) })
+      end)
+      return
+    end
+  end
+end
+
+-- Atlanılan hedefte ilk kaydın başlığı ekranın en üstünde, imleç ilk alanda olsun.
+local function focus_first_record(buf)
+  local win = vim.fn.win_findbuf(buf)[1]
+  if not win then return end
+  local first = records(vim.api.nvim_buf_get_lines(buf, 0, -1, false), expanded(buf))[1]
+  if not first then return end
+  vim.api.nvim_win_call(win, function()
+    local line = math.min(first.line + (expanded(buf) and 1 or 0), vim.api.nvim_buf_line_count(buf))
+    vim.fn.winrestview({ lnum = line, col = 0, topline = first.line })
+  end)
 end
 
 -- Eklentinin FK atlaması kolon adını tablo başlığından okuyor; detay (expanded) görünümde
@@ -98,7 +141,7 @@ function M.jump_to_foreign_key()
   local db = vim.b[buf].db
   local is_expanded = expanded(buf)
   if type(db) == "table" and db.input then
-    arm({ push = { input = db.input, expanded = is_expanded }, expanded = is_expanded })
+    arm({ push = { input = db.input, expanded = is_expanded, snap = snapshot(buf) }, expanded = is_expanded, focus = true })
   end
   if is_expanded then
     vim.fn.CodexDBUIJumpExpanded()
@@ -112,7 +155,7 @@ function M.back()
   if not entry then
     return vim.notify("Geri gidilecek sonuç yok", vim.log.levels.INFO)
   end
-  arm({ expanded = entry.expanded })
+  arm({ expanded = entry.expanded, restore = entry.snap })
   vim.cmd("DB < " .. vim.fn.fnameescape(entry.input))
 end
 
@@ -154,14 +197,24 @@ function M.setup()
       after_result = nil
       if vim.uv.now() - job.t > 8000 then return end -- atlama başarısız olmuş, eski kayıt
       if job.push then history[#history + 1] = job.push end
-      if not job.expanded then return end
+      if not job.expanded and not job.restore and not job.focus then return end
       local path = event.match:gsub("/DBExecutePost$", "")
       vim.schedule(function()
         local buf = vim.fn.bufnr(path)
-        if buf < 0 or expanded(buf) then return end
-        local win = vim.fn.win_findbuf(buf)[1]
-        if win then
-          vim.api.nvim_win_call(win, function() pcall(vim.fn["db_ui#dbout#toggle_layout"]) end)
+        if buf < 0 then buf = vim.api.nvim_get_current_buf() end
+        if job.expanded and not expanded(buf) then
+          -- Detay görünüme çevirmek sorguyu yeniden çalıştırır; imleci o bitince oturt.
+          arm({ restore = job.restore, focus = job.focus })
+          local win = vim.fn.win_findbuf(buf)[1]
+          if win then
+            vim.api.nvim_win_call(win, function() pcall(vim.fn["db_ui#dbout#toggle_layout"]) end)
+          end
+          return
+        end
+        if job.restore then
+          restore(buf, job.restore)
+        elseif job.focus then
+          focus_first_record(buf)
         end
       end)
     end,
