@@ -4,6 +4,18 @@ require("config.remote_clipboard").setup()
 -- Add any additional options here
 vim.opt.relativenumber = false
 
+-- Mason'un prettier'ı `#!/usr/bin/env node` ile başlıyor; nvim tmux/fish/GUI gibi nvm'siz bir
+-- ortamdan açılınca node bulunamıyor. node PATH'te yoksa nvm'in en yeni sürümünü ekle.
+if vim.fn.executable("node") == 0 then
+  local dirs = vim.fn.glob(vim.env.HOME .. "/.nvm/versions/node/v*/bin", false, true)
+  table.sort(dirs, function(a, b)
+    return vim.version.cmp(vim.version.parse(a:match("/v([%d.]+)/bin$")), vim.version.parse(b:match("/v([%d.]+)/bin$"))) < 0
+  end)
+  if #dirs > 0 then
+    vim.env.PATH = dirs[#dirs] .. ":" .. vim.env.PATH
+  end
+end
+
 -- Global indent: 4 boşluk (LazyVim default'u 2). Java dahil tüm dosyalar için geçerli;
 -- jdtls formatlarken de shiftwidth'i tabSize olarak kullanır.
 vim.opt.shiftwidth = 4
