@@ -28,6 +28,14 @@ return {
       -- Dadbod's default S/E shadow Scratch and Neo-tree in query buffers.
       vim.g.db_ui_disable_mappings_sql = 1
       vim.g.db_ui_disable_mappings_javascript = 1
+      -- DBUI sorgu buffer'ları geçici; kapatırken "kaydedilsin mi?" diye sorma (LazyVim confirm=true).
+      -- Kaydetmek istersen Space v w var.
+      vim.api.nvim_create_autocmd({ "TextChanged", "TextChangedI", "TextChangedP", "InsertLeave" }, {
+        group = vim.api.nvim_create_augroup("DatabaseQueryNoPrompt", { clear = true }),
+        callback = function(event)
+          if vim.b[event.buf].dbui_db_key_name then vim.bo[event.buf].modified = false end
+        end,
+      })
       vim.api.nvim_create_autocmd("FileType", {
         group = vim.api.nvim_create_augroup("DatabaseKeymaps", { clear = true }),
         pattern = { "sql", "mysql", "plsql", "dbout" },
@@ -46,6 +54,13 @@ return {
             end
             vim.keymap.set("n", "<leader>vl", require("config.database_results").toggle,
               { buffer = event.buf, silent = true, desc = "Database result layout (keep record)" })
+            for _, lhs in ipairs({ "<C-t>", "<C-ğ>" }) do -- Ctrl+ğ: Ctrl+ü'nün (ileri) tersi
+              vim.keymap.set("n", lhs, require("config.database_results").back,
+                { buffer = event.buf, silent = true, desc = "Önceki sonuca dön (FK atlaması geri)" })
+            end
+            -- Plugin'in <C-]> atlaması detay görünümde bozuk; kendi sürümümüz her iki görünümde çalışır.
+            vim.keymap.set("n", "<C-]>", require("config.database_results").jump_to_foreign_key,
+              { buffer = event.buf, silent = true, desc = "Foreign key'in tablosundaki satıra git" })
             vim.keymap.set("n", "<leader>R", require("config.database_results").toggle,
               { buffer = event.buf, silent = true, desc = "Database result layout (keep record)" })
           else

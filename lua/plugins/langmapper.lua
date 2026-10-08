@@ -49,5 +49,14 @@ return {
         },
       },
     })
+
+    -- map_all_ctrl <C-ğ>'yi <C-[> (= Esc) olarak çeviriyor; Esc'in ikinci bir tuşu istenmiyor.
+    local function drop_ctrl_g_breve()
+      for _, mode in ipairs({ "n", "i", "v", "x", "s", "o", "c", "t" }) do
+        pcall(vim.keymap.del, mode, "<C-ğ>")
+      end
+    end
+    drop_ctrl_g_breve()
+    vim.api.nvim_create_autocmd("User", { pattern = "VeryLazy", once = true, callback = drop_ctrl_g_breve })
   end,
 }

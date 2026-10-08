@@ -80,8 +80,92 @@ function M.toggle()
   end
 end
 
+-- FK atlama geçmişi: her atlamadan önceki sorgu (dosyası) ve görünümü saklanır, <C-t> ile geri dönülür.
+local history = {}
+-- Sıradaki sonuç gelince: geçmişe ekle (push) ve/veya detay görünüme çevir (expanded).
+local after_result
+
+local function arm(opts)
+  opts.t = vim.uv.now()
+  after_result = opts
+end
+
+-- Eklentinin FK atlaması kolon adını tablo başlığından okuyor; detay (expanded) görünümde
+-- her satır "kolon | değer" olduğu için orada "No valid foreign key found" veriyordu.
+-- Detay görünümde kolon/değeri imlecin satırından okuyup aynı sorguyu çalıştırır.
+function M.jump_to_foreign_key()
+  local buf = vim.api.nvim_get_current_buf()
+  local db = vim.b[buf].db
+  local is_expanded = expanded(buf)
+  if type(db) == "table" and db.input then
+    arm({ push = { input = db.input, expanded = is_expanded }, expanded = is_expanded })
+  end
+  if is_expanded then
+    vim.fn.CodexDBUIJumpExpanded()
+  else
+    vim.fn["db_ui#dbout#jump_to_foreign_table"]()
+  end
+end
+
+function M.back()
+  local entry = table.remove(history)
+  if not entry then
+    return vim.notify("Geri gidilecek sonuç yok", vim.log.levels.INFO)
+  end
+  arm({ expanded = entry.expanded })
+  vim.cmd("DB < " .. vim.fn.fnameescape(entry.input))
+end
+
 function M.setup()
+  vim.cmd([[
+    function! CodexDBUIJumpExpanded() abort
+      let m = matchlist(getline('.'), '^\(\S\+\)\s*|\s\?\(.\{-}\)\s*$')
+      if empty(m)
+        return db_ui#notifications#error('Önce bir alanın (kolon | değer) üzerine gel.')
+      endif
+      let field_name = m[1]
+      let field_value = m[2]
+      if field_value ==# ''
+        return db_ui#notifications#error('Alan boş (NULL), gidilecek kayıt yok.')
+      endif
+      let db_url = b:db.db_url
+      let scheme = db_ui#schemas#get(db#url#parse(db_url).scheme)
+      if empty(scheme)
+        return db_ui#notifications#error('Bu veritabanı türü foreign key atlamasını desteklemiyor.')
+      endif
+      let fk_query = substitute(scheme.foreign_key_query, '{col_name}', field_name, '')
+      let Parser = get(scheme, 'parse_virtual_results', scheme.parse_results)
+      let result = Parser(db_ui#schemas#query(db_url, scheme, fk_query), 3)
+      if empty(result)
+        return db_ui#notifications#error('No valid foreign key found.')
+      endif
+      let [foreign_table, foreign_column, foreign_schema] = result[0]
+      exe 'DB ' . printf(scheme.select_foreign_key_query, foreign_schema, foreign_table, foreign_column, db_ui#utils#quote_query_value(field_value))
+    endfunction
+  ]])
   local group = vim.api.nvim_create_augroup("DatabaseResults", { clear = true })
+  -- FK atlaması / geri dönüş sonrası: geçmişe ekle, gerekirse detay görünüme çevir.
+  vim.api.nvim_create_autocmd("User", {
+    group = group,
+    pattern = "*DBExecutePost",
+    callback = function(event)
+      local job = after_result
+      if not job then return end
+      after_result = nil
+      if vim.uv.now() - job.t > 8000 then return end -- atlama başarısız olmuş, eski kayıt
+      if job.push then history[#history + 1] = job.push end
+      if not job.expanded then return end
+      local path = event.match:gsub("/DBExecutePost$", "")
+      vim.schedule(function()
+        local buf = vim.fn.bufnr(path)
+        if buf < 0 or expanded(buf) then return end
+        local win = vim.fn.win_findbuf(buf)[1]
+        if win then
+          vim.api.nvim_win_call(win, function() pcall(vim.fn["db_ui#dbout#toggle_layout"]) end)
+        end
+      end)
+    end,
+  })
   vim.api.nvim_create_autocmd({ "FileType", "BufWinEnter" }, {
     group = group,
     callback = function(event)
