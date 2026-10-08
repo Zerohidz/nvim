@@ -468,6 +468,11 @@ if vim.g.neovide then
   vim.keymap.set({ "n", "v", "i", "c", "t" }, "<D-v>", paste, { noremap = true, silent = true, desc = "Paste (Neovide)" })
   -- Super+V (Hyprland → Shift+Insert olarak gelir)
   vim.keymap.set({ "n", "v", "i", "c", "t" }, "<S-Insert>", paste, { noremap = true, silent = true, desc = "Paste (Neovide)" })
+  -- macOS Türkçe Q: "[" ve "]" Option+8/9 ile yazılıyor. Option basılıyken gelen boşluk
+  -- <M-Space> olur; insert modda eşleşmesiz Alt+tuş = <Esc>+tuş sayıldığı için "- [ ] "
+  -- yazarken insert'ten çıkılıyordu (makro kaydında da bozuk Esc kalıyordu).
+  vim.keymap.set({ "i", "c" }, "<M-Space>", " ", { noremap = true, desc = "Option+Space = boşluk" })
+
   -- Super+C (Hyprland → Ctrl+Insert olarak gelir): seçimi sistem panosuna kopyala
   vim.keymap.set("v", "<C-Insert>", '"+y', { noremap = true, silent = true, desc = "Copy (Neovide)" })
 
