@@ -217,12 +217,19 @@ end
 vim.api.nvim_create_autocmd("TermOpen", {
   desc = "Terminal normal navigation: Claude/Codex native scroll and search",
   callback = function(args)
-    -- Codex fullscreen transcript sadece job üzerinde kaydırılır. Claude
-    -- mevcut scrollback + job davranışını, shell Neovim defaults'ı korur.
-    local send = function(bytes, fallback_keys)
+    -- Codex/opencode fullscreen transcript sadece job üzerinde kaydırılır.
+    -- Claude mevcut scrollback + job davranışını, shell Neovim defaults'ı korur.
+    -- keys: claude (Codex için de varsayılan), codex_wheel, opencode byte'ları.
+    local send = function(fallback_keys, keys)
       return function()
-        if terminal_agent.is_codex_running() then
-          vim.api.nvim_chan_send(vim.b.terminal_job_id, bytes)
+        local agent = terminal_agent.agent()
+        if agent then
+          local agent_bytes = keys[agent] or keys.claude
+          if agent == "codex" and keys.codex_wheel then
+            local count = math.max(1, math.floor((vim.api.nvim_win_get_height(0) + 3) / 6))
+            agent_bytes = keys.codex_wheel:rep(count)
+          end
+          vim.api.nvim_chan_send(vim.b.terminal_job_id, agent_bytes)
           vim.defer_fn(function() vim.cmd("redraw!") end, 80)
           return
         end
@@ -230,7 +237,7 @@ vim.api.nvim_create_autocmd("TermOpen", {
         if _is_claude_running() then
           local chan = vim.b.terminal_job_id
           if chan then
-            vim.api.nvim_chan_send(chan, bytes)
+            vim.api.nvim_chan_send(chan, keys.claude)
             vim.defer_fn(function()
               vim.cmd("redraw!")
             end, 80)
@@ -306,17 +313,24 @@ vim.api.nvim_create_autocmd("TermOpen", {
     -- Ctrl+D/Ctrl+U yerine PageDown/PageUp: claude code'da bunlar zaten
     -- default halfPage scroll yapıyor, Ctrl+U'yu input kill-line için
     -- serbest bırakıyoruz (Scroll context modsuz aktif, çakışıyordu).
-    vim.keymap.set("n", "<C-d>", send("\x1b[6~", "<C-d>"), map_opts) -- PageDown
-    vim.keymap.set("n", "<C-u>", send("\x1b[5~", "<C-u>"), map_opts) -- PageUp
-    vim.keymap.set("n", "gg", send("\x1b[1;5H", "gg"), map_opts) -- Ctrl+Home
+    -- opencode: Ctrl+D/U uygulamadan çıkış/başka iş; native session.half.page
+    -- (Ctrl+Alt+D/U), session.first (Alt+Home), session.last (Ctrl+Alt+G).
+    vim.keymap.set("n", "<C-d>", send("<C-d>", {
+      claude = "\x1b[6~", codex_wheel = "\x1b[<65;1;1M", opencode = "\x1b\x04",
+    }), map_opts) -- Codex half viewport; Claude PageDown
+    vim.keymap.set("n", "<C-u>", send("<C-u>", {
+      claude = "\x1b[5~", codex_wheel = "\x1b[<64;1;1M", opencode = "\x1b\x15",
+    }), map_opts) -- Codex half viewport; Claude PageUp
+    vim.keymap.set("n", "gg", send("gg", { claude = "\x1b[1;5H", opencode = "\x1b[1;3H" }), map_opts) -- Ctrl+Home
     -- G (scroll:bottom, Ctrl+End): claude code'un bilinen bug'ı (>1 sayfa
     -- atlarsa pane blank kalıyor, upstream #71509). Workaround: force redraw
     -- hemen ardından gönder. Ctrl+L default'ta chat:clearInput olduğu için
     -- (input'u silmesin diye) app:redraw'ı ~/.claude/keybindings.json'da
     -- boş duran Ctrl+F'e bağladık, onu gönderiyoruz.
     vim.keymap.set("n", "G", function()
-      if terminal_agent.is_codex_running() then
-        vim.api.nvim_chan_send(vim.b.terminal_job_id, "\x1b[1;5F")
+      local agent = terminal_agent.agent()
+      if agent then
+        vim.api.nvim_chan_send(vim.b.terminal_job_id, agent == "opencode" and "\x1b\x07" or "\x1b[1;5F")
         vim.defer_fn(function() vim.cmd("redraw!") end, 80)
         return
       end
@@ -369,8 +383,9 @@ vim.api.nvim_create_autocmd("TermOpen", {
     -- view tetikleyicisine çeviriyordu). Kutu içindeyken eski (kanıtlanmış,
     -- kör tek-seferlik) delta yöntemi kullanılır -- bkz. _real_cursor_goto notu.
     vim.keymap.set("n", "i", function()
-      if terminal_agent.is_codex_running() then
-        if codex_search_active() then vim.b.codex_search_phase = "query" end
+      local agent = terminal_agent.agent()
+      if agent then
+        if agent == "codex" and codex_search_active() then vim.b.codex_search_phase = "query" end
         vim.cmd("startinsert")
         return
       end
@@ -386,8 +401,9 @@ vim.api.nvim_create_autocmd("TermOpen", {
       vim.b.term_cursor_vcol = vim.fn.virtcol(".")
     end, map_opts)
     vim.keymap.set("n", "a", function()
-      if terminal_agent.is_codex_running() then
-        if codex_search_active() then vim.b.codex_search_phase = "query" end
+      local agent = terminal_agent.agent()
+      if agent then
+        if agent == "codex" and codex_search_active() then vim.b.codex_search_phase = "query" end
         vim.cmd("startinsert")
         return
       end

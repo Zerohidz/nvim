@@ -9,11 +9,12 @@ Claude Code için kullanılan C-n normal navigation akışı Codex CLI için de 
 Codex composer Vim editing, Codex CLI upstream değişikliği, commit/push ve mevcut Claude davranışını yeniden tasarlamak.
 
 ## 3. Seçilen tasarım
-Codex 0.160.1 native fullscreen transcript tuşlarına adapter: C-u/d → PageUp/PageDown, gg/G → Ctrl+Home/End, ./ → F3. tmux codex-nav table; Neovim terminal normal mode buffer mappings. C-n sadece normal navigation'a geçer; i/a ile input'a dönülür. Tam sayfa native kaydırma kullanılır.
+Codex 0.160.1 native fullscreen transcript tuşlarına adapter: C-u/d → dinamik yaklaşık yarım viewport native SGR wheel, gg/G → Ctrl+Home/End, ./ → F3. tmux codex-nav table; Neovim terminal normal mode buffer mappings. C-n sadece normal navigation'a geçer; i/a ile input'a dönülür. C-u/d için yarım viewport, j/k için mevcut tam sayfa native kaydırma kullanılır.
 
 Reddedilen alternatifler: Claude C-o + / Codex'te yanlış action; C-t overlay state tracking manuel q/C-t ve süreç restart'ında senkron kaybeder; terminal scrollback fullscreen transcript'i kapsamaz.
 
 ## 4. Bağlayıcı teknik kararlar
+- D8 (half-page follow-up): Codex C-u/d, mevcut terminal viewport yüksekliğinin yaklaşık yarısını native SGR wheel ile kaydırır: up ESC[<64;1;1M, down ESC[<65;1;1M; tekrar max(1,floor((height+3)/6)). Her wheel 3 satırdır. Neovim mevcut pencere yüksekliğini, tmux hedef pane yüksekliğini her basışta okur; pane/client açık hedeflidir. Büyük multiline composer durumunda transcript alanının yarısı garanti edilmez. Claude, shell ve j/k Page davranışı korunur.
 - D7 (2026-10-07 follow-up): Codex arama girişinde Enter yalnız query kabulü yapıp sonuç navigation mode'una geçer; CLI'ye Enter göndermez. Bu modda n → Enter (next), N → Ctrl+P (previous), i → query editing, Esc/q → search close. Query editing n/N/q harflerini ve bracketed paste metnini aynen yazar. State buffer/pane-client ve gerçek Codex process identity'ye bağlıdır; pane değişimi veya process exit/restart sonrası synthetic Enter gönderilmez. Yalnız adapter ile açılmış aramaya uygulanır; normal composer Enter/n/N etkilenmez. İki repo commit/push kullanıcı tarafından yetkilendirildi.
 - D1: Claude mappings ve plain shell fallback korunur; Claude input-edit logic Codex'e uygulanmaz.
 - D2: Process detection executable basename ile çalışır, args içindeki incidental codex sözcüğüne dayanmaz. Neovim shell grandchildren/node wrapper desteklenir; tmux içinde Neovim önceliklidir.
@@ -33,6 +34,7 @@ Reddedilen alternatifler: Claude C-o + / Codex'te yanlış action; C-t overlay s
 | AC6 | Shell/node/wrapper ve nvim-terminal içindeki tmux aktif pane detection çalışır | process fixture + tmux test | node/wrapper, suspended/background, editor/TTY boundary ve canlı nested tmux active-pane switch geçti |
 | AC7 | Repo değişiklikleri aktif tmux config ile eşleşir | cmp + source-file | ~/.config/tmux repo dizinine symlink; iki cmp exit 0; source-file exit 0; aktif codex-nav bindings okundu |
 | AC8 | Adapter aramasında query n/N içerirse aynen yazılır; Enter sonrası n/N native next/previous gönderir; i edit ve Esc/q close çalışır; composer n/N/Enter korunur | PTY + canlı Codex + review | Neovim 124 checks PASS; tmux 5 tests OK (pane/process guard ve multiline paste dahil); gerçek Codex query Enter → search-nav, n/N ile eşleşmeler değişti, Find: Codex aynı kaldı; code-reviewer yeni actionable bulgu yok |
+| AC9 | Codex C-n navigation içinde C-u/d basıldığında güncel terminal viewport yarısına en yakın 3 satır katı native wheel bytes gönderilir; resize sayıyı değiştirir, yönler ters, draft ve Claude/shell korunur | PTY resize + gerçek Codex | Neovim 91 process/PTY + 41 mode checks PASS; tmux 5 tests OK; native Codex height36→18 rows, height48→24 rows; up restored capture/draft |
 
 ## 6. Edge case'ler
 Süreç yok/bitmiş: normal fallback. Codex adı prompt/arg içinde: algılanmaz. Birden çok pane: yalnız aktif hedef. Claude input editing: ayrı kalır.
@@ -62,3 +64,8 @@ Mimari/domain/red-team: Codex adapter ayrı; direct child tespiti yetersiz; dela
 - tmux tests: 5 tests OK, 9.085 s; query typing, Enter swallow, n/N bytes, edit/close, bracketed paste, pane switch, process exit/restart guard.
 - Gerçek Codex 0.160.1: query Enter sonrası codex-search-nav; n ve N farklı eşleşmelere giderken query aynı kaldı. Native CLI footer kendi Enter/CtrlP hintlerini göstermeyi sürdürür; adapter tuşları dış terminal/editor tarafından uygulanır.
 - Görev dışı lazy-lock.json Obsidian lock değişikliği commit kapsamına alınmadı.
+
+### Follow-up QA (half viewport)
+- Neovim tests/run-terminal-agent.sh: 91 process/PTY checks + 41 search/composer checks PASS; resize18/42 ve iki wheel yönü doğrulandı. Nested tmux fixture artık gerçek Codex gibi SGR mouse reporting açar.
+- tmux unittest: 5 tests OK (9.783s); güncel pane_height resize18/42 bytes ve navigation table korunması doğrulandı.
+- Parent implementer gerçek Codex0.160.1 isolated resume fork: viewport36→18rows, resize48→24rows; inverse up capture aynı, composer draft korundu. Prompt submit edilmedi.

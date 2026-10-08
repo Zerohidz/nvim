@@ -1,5 +1,5 @@
--- Native Codex fullscreen navigation. Detection is dynamic: a terminal may
--- switch between its shell, a wrapper and a tmux client without reopening it.
+-- Native Codex/opencode fullscreen navigation. Detection is dynamic: a terminal
+-- may switch between its shell, a wrapper and a tmux client without reopening it.
 local M = {}
 local function basename(path)
   return (path or ""):match("([^/]+)$") or ""
@@ -61,6 +61,60 @@ function M.is_codex_command(command)
   return true
 end
 
+-- opencode: no subcommand (optional directory positional) starts the fullscreen
+-- TUI. `mini` is an inline interface with different keys, so it is excluded.
+local opencode_noninteractive = {
+  upgrade = true, update = true, uninstall = true, acp = true, api = true,
+  debug = true, auth = true, mcp = true, plugin = true, models = true,
+  stats = true, mini = true, run = true, session = true, service = true,
+  reload = true, pair = true, serve = true, web = true, export = true,
+  import = true, github = true, agent = true,
+}
+local opencode_value_options = {
+  ["--server"] = true, ["--session"] = true, ["-s"] = true, ["--prompt"] = true,
+  ["--log-level"] = true,
+}
+function M.is_opencode_command(command)
+  local words = argv(command)
+  local first = basename(words[1])
+  local start = 2
+  if first == "node" or first == "nodejs" or first == "bun" then
+    local script = basename(words[2])
+    if script ~= "opencode" and script ~= "opencode.js" then
+      return false
+    end
+    start = 3
+  elseif first ~= "opencode" then
+    return false
+  end
+  local i = start
+  while i <= #words do
+    local word = words[i]
+    if word == "--" then
+      return true
+    elseif word == "--help" or word == "-h" or word == "--version" or word == "-v"
+      or word == "--completions" or word == "--wizard" then
+      return false
+    elseif opencode_value_options[word] then
+      i = i + 2
+    elseif word:sub(1, 1) == "-" then
+      i = i + 1
+    else
+      return not opencode_noninteractive[word]
+    end
+  end
+  return true
+end
+
+-- "codex", "opencode" or nil for one ps args line.
+function M.agent_kind(command)
+  if M.is_codex_command(command) then
+    return "codex"
+  elseif M.is_opencode_command(command) then
+    return "opencode"
+  end
+end
+
 function M.parse_processes(output)
   local processes = {}
   for line in output:gmatch("[^\n]+") do
@@ -107,8 +161,9 @@ local function tmux_pane(process, run)
   end
 end
 
-function M.detect(root_pid, processes, run)
+function M.detect(root_pid, processes, run, match)
   run = run or system
+  match = match or M.is_codex_command
   local seen = {}
   local function visit(pid, terminal_tty)
     if seen[pid] then
@@ -130,7 +185,7 @@ function M.detect(root_pid, processes, run)
     end
     -- '+' is the portable BSD/Linux ps foreground process group marker.
     if process and process.stat:find("+", 1, true) and not process.stat:find("[TXZ]") then
-      if M.is_codex_command(process.command) then
+      if match(process.command) then
         return pid
       end
       local pane_pid = tmux_pane(process, run)
@@ -149,19 +204,37 @@ function M.detect(root_pid, processes, run)
   end
   return visit(root_pid)
 end
-function M.codex_pid()
+-- One ps snapshot per key press: returns kind ("codex"/"opencode") and pid of
+-- the foreground agent in the current terminal buffer, or nil.
+function M.agent()
   local chan = vim.b.terminal_job_id
   if not chan then
-    return false
+    return nil
   end
   local ok, pid = pcall(vim.fn.jobpid, chan)
   if not ok or not pid or pid <= 0 then
-    return false
+    return nil
   end
   local output = system({ "ps", "-Aww", "-o", "pid=,ppid=,pgid=,tty=,stat=,args=" })
-  return output and M.detect(pid, M.parse_processes(output)) or nil
+  if not output then
+    return nil
+  end
+  local processes = M.parse_processes(output)
+  local found = M.detect(pid, processes, nil, function(command)
+    return M.agent_kind(command) ~= nil
+  end)
+  if found then
+    return M.agent_kind(processes[found].command), found
+  end
+end
+function M.codex_pid()
+  local kind, pid = M.agent()
+  return kind == "codex" and pid or nil
 end
 function M.is_codex_running()
   return not not M.codex_pid()
+end
+function M.is_opencode_running()
+  return M.agent() == "opencode"
 end
 return M

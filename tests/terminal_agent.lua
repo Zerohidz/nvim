@@ -26,6 +26,20 @@ for _, command in ipairs({
 }) do
   check(not agent.is_codex_command(command), "noninteractive: " .. command)
 end
+for _, command in ipairs({
+  "opencode", "/opt/homebrew/bin/opencode", "opencode -c", "opencode --session abc",
+  "opencode ~/dev/project", "opencode --prompt run --auto", "node /usr/lib/node_modules/opencode-ai/bin/opencode",
+}) do
+  check(agent.is_opencode_command(command), "opencode interactive: " .. command)
+  check(agent.agent_kind(command) == "opencode", "opencode kind: " .. command)
+end
+for _, command in ipairs({
+  "echo opencode", "opencode run hi", "opencode serve", "opencode mini", "opencode auth login",
+  "opencode --help", "opencode -v", "opencode-other", "node server.js opencode",
+}) do
+  check(not agent.is_opencode_command(command), "opencode noninteractive: " .. command)
+end
+check(agent.agent_kind("codex") == "codex" and agent.agent_kind("bash") == nil, "agent kind codex/none")
 local snapshot = agent.parse_processes([[
 10 1 10 pts/1 Ss+ bash
 11 10 11 pts/1 S node /usr/bin/wrapper.js
@@ -95,13 +109,26 @@ end
 local job, log = open_sink("codex")
 check(agent.is_codex_running(), "actual foreground Codex PTY detection")
 local bytes = ""
-for _, pair in ipairs({ { "<C-u>", "\x1b[5~" }, { "<C-d>", "\x1b[6~" }, { "gg", "\x1b[1;5H" }, { "G", "\x1b[1;5F" } }) do
+local function halfwheel(direction)
+  return ("\x1b[<" .. direction .. ";1;1M"):rep(math.max(1, math.floor((vim.api.nvim_win_get_height(0) + 3) / 6)))
+end
+for _, pair in ipairs({ { "<C-u>", halfwheel(64) }, { "<C-d>", halfwheel(65) }, { "gg", "\x1b[1;5H" }, { "G", "\x1b[1;5F" } }) do
   local old_cursor = vim.api.nvim_win_get_cursor(0)
   mapping(pair[1])()
   bytes = bytes .. pair[2]
   check(vim.wait(1000, function() return read(log) == hex(bytes) end), "native bytes " .. pair[1])
   check(vim.deep_equal(old_cursor, vim.api.nvim_win_get_cursor(0)), "no scrollback fallback " .. pair[1])
 end
+local old_lines = vim.o.lines
+for _, height in ipairs({ 18, 42 }) do
+  vim.o.lines = height
+  for _, pair in ipairs({ { "<C-u>", 64 }, { "<C-d>", 65 } }) do
+    mapping(pair[1])()
+    bytes = bytes .. halfwheel(pair[2])
+    check(vim.wait(1000, function() return read(log) == hex(bytes) end), "resized halfpage " .. height .. pair[1])
+  end
+end
+vim.o.lines = old_lines
 local original_cmd = vim.cmd
 local startinsert_count = 0
 -- Headless mode does not perform mode transitions inside synchronous Lua;
@@ -119,6 +146,28 @@ mapping("a")()
 check(startinsert_count == 4, "search and i/a request terminal input mode")
 check(read(log) == hex(bytes), "Codex i/a never emit Claude cursor-edit bytes")
 vim.cmd = original_cmd
+vim.fn.jobstop(job)
+
+job, log = open_sink("opencode")
+check(agent.agent() == "opencode" and not agent.is_codex_running(), "actual foreground opencode PTY detection")
+bytes = ""
+for _, pair in ipairs({
+  { "<C-u>", "\x1b\x15" }, { "<C-d>", "\x1b\x04" }, { "gg", "\x1b[1;3H" }, { "G", "\x1b\x07" },
+}) do
+  local old_cursor = vim.api.nvim_win_get_cursor(0)
+  mapping(pair[1])()
+  bytes = bytes .. pair[2]
+  check(vim.wait(1000, function() return read(log) == hex(bytes) end), "opencode native bytes " .. pair[1])
+  check(vim.deep_equal(old_cursor, vim.api.nvim_win_get_cursor(0)), "opencode no scrollback fallback " .. pair[1])
+end
+startinsert_count = 0
+vim.cmd = setmetatable({}, { __call = function(_, command)
+  if command == "startinsert" then startinsert_count = startinsert_count + 1 else original_cmd(command) end
+end })
+mapping("i")()
+mapping("a")()
+vim.cmd = original_cmd
+check(startinsert_count == 2 and read(log) == hex(bytes), "opencode i/a enter input without Claude cursor bytes")
 vim.fn.jobstop(job)
 
 job, log = open_sink("claude")
@@ -157,7 +206,7 @@ if vim.fn.executable("tmux") == 1 then
     local tmux_job = open_sink("shell", vim.list_extend(vim.deepcopy(tmux), { "attach-session", "-t", "nav-test" }))
     check(agent.is_codex_running(), "actual nested tmux Codex detection")
     mapping("<C-u>")()
-    check(vim.wait(1000, function() return read(pane_log) == hex("\x1b[5~") end), "native bytes through tmux")
+    check(vim.wait(1000, function() return read(pane_log) == hex(halfwheel(64)) end), "native bytes through tmux")
     -- Switch the attached client's active window to a plain sink while Codex
     -- stays alive in its other window; detection must follow the active pane.
     local shell_log = vim.fn.tempname()

@@ -10,6 +10,9 @@ int main(int argc, char **argv) {
   tcsetattr(STDIN_FILENO, TCSANOW, &term);
   FILE *log = fopen(argv[1], "a");
   if (!log) return 1;
+  /* Advertise native application mouse input so nested tmux forwards SGR wheels. */
+  const char mouse[] = "\033[?1000h\033[?1006h";
+  write(STDOUT_FILENO, mouse, sizeof(mouse) - 1);
   write(STDOUT_FILENO, "READY\r\n", 7);
   unsigned char bytes[128];
   ssize_t count;
