@@ -28,6 +28,9 @@ return {
       },
     },
 
+    -- render-markdown.nvim ile çakışıyor (ikisi de conceal/ikon çiziyor)
+    ui = { enable = false },
+
     -- see below for full list of options 👇
   },
 }
