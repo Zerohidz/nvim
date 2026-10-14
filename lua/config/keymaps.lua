@@ -456,6 +456,10 @@ vim.api.nvim_create_autocmd("TermOpen", {
   end,
 })
 
+-- Insert modunda da Ctrl-H ile soldaki pencereye geç.
+-- Yazi terminal modundaki istisnayı terminal_passthrough buffer bazında yönetir.
+vim.keymap.set("i", "<C-h>", [[<Esc><C-w>h]], opts)
+
 -- Terminal modundayken doğrudan pencere değiştirme
 vim.keymap.set("t", "<C-h>", [[<C-\><C-n><C-w>h]], opts)
 vim.keymap.set("t", "<C-j>", [[<C-\><C-n><C-w>j]], opts)

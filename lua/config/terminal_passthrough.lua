@@ -18,7 +18,8 @@ local keys = {
   ["<C-h>"] = {
     byte = "\008", -- yazi: hidden toggle (mgr) / backspace (input)
     fallback = function()
-      vim.api.nvim_input("<C-\\><C-n><C-w>h")
+      local input = vim.api.nvim_replace_termcodes("<C-\\><C-n><C-w>h", true, false, true)
+      vim.api.nvim_feedkeys(input, "n", false)
     end,
   },
   ["<C-k>"] = {
