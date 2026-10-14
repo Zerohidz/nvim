@@ -30,12 +30,13 @@ local function records(lines, expanded)
   return result
 end
 
+-- Fixed result-pane height; deliberately decoupled from toggleterm's size.
+local RESULT_HEIGHT = 30
+
 function M.resize(buf)
   for _, win in ipairs(vim.fn.win_findbuf(buf)) do
     if vim.api.nvim_win_is_valid(win) and #vim.api.nvim_tabpage_list_wins(vim.api.nvim_win_get_tabpage(win)) > 1 then
-      local size = require("toggleterm.config").get("size")
-      if type(size) == "function" then size = size({ direction = "horizontal" }) end
-      vim.api.nvim_win_set_height(win, size)
+      vim.api.nvim_win_set_height(win, RESULT_HEIGHT)
     end
   end
 end

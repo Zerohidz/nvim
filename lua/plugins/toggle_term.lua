@@ -7,7 +7,7 @@ return {
     vim.api.nvim_set_hl(0, "Term3Color", { bg = "#1e1d2b" })
     require("toggleterm").setup({
       direction = "horizontal",
-      size = 30,
+      size = 40,
       shade_terminals = false,
       persist_size = true,
       auto_scroll = false,
