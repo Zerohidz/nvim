@@ -52,6 +52,10 @@ vim.api.nvim_create_autocmd("BufAdd", {
 	end,
 })
 
+-- Yazi nvim terminalinde çalışırken <C-h> gibi nvim'in çaldığı Ctrl tuşlarını yazi'ye
+-- geri veren buffer-local override'ları kurar (yazi yokken davranış değişmez).
+require("config.terminal_passthrough").setup()
+
 -- persistence.nvim çıkışta oturumu kaydederken geçici klasördeki dosyaları (nvim /tmp/x.xml,
 -- test/script çalıştırmaları) arglist'e ve buffer listesine yazıyor; sonraki açılışta o dosya
 -- (ör. t.xml) hayalet buffer olarak geri geliyordu. Kayıttan hemen önce bunları ayıkla.

@@ -106,6 +106,12 @@ function M.is_opencode_command(command)
   return true
 end
 
+-- yazi is not an "agent" (no transcript navigation applies to it); it is only used
+-- as a match function so its own keybindings get back the Ctrl keys we hijack.
+function M.is_yazi_command(command)
+  return basename(argv(command)[1]) == "yazi"
+end
+
 -- "codex", "opencode" or nil for one ps args line.
 function M.agent_kind(command)
   if M.is_codex_command(command) then
@@ -204,9 +210,9 @@ function M.detect(root_pid, processes, run, match)
   end
   return visit(root_pid)
 end
--- One ps snapshot per key press: returns kind ("codex"/"opencode") and pid of
--- the foreground agent in the current terminal buffer, or nil.
-function M.agent()
+-- One ps snapshot per key press: returns the pid of the first foreground process in
+-- the current terminal buffer matching `match`, or nil.
+function M.detect_in_buffer(match)
   local chan = vim.b.terminal_job_id
   if not chan then
     return nil
@@ -220,7 +226,13 @@ function M.agent()
     return nil
   end
   local processes = M.parse_processes(output)
-  local found = M.detect(pid, processes, nil, function(command)
+  return M.detect(pid, processes, nil, match), processes
+end
+
+-- One ps snapshot per key press: returns kind ("codex"/"opencode") and pid of
+-- the foreground agent in the current terminal buffer, or nil.
+function M.agent()
+  local found, processes = M.detect_in_buffer(function(command)
     return M.agent_kind(command) ~= nil
   end)
   if found then
@@ -236,5 +248,8 @@ function M.is_codex_running()
 end
 function M.is_opencode_running()
   return M.agent() == "opencode"
+end
+function M.is_yazi_running()
+  return not not M.detect_in_buffer(M.is_yazi_command)
 end
 return M
