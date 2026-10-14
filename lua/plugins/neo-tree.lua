@@ -12,6 +12,18 @@ return {
     },
   },
   opts = {
+    -- Sadece neo-tree pencerelerinde geçerli (buffer-local), dışarıda hiçbir şeye dokunmaz.
+    window = {
+      mappings = {
+        ["N"] = {
+          function(state)
+            local node = state and state.tree and state.tree:get_node()
+            require("config.open_folder_session").open_node(node)
+          end,
+          desc = "Bu klasörde yeni Neovim oturumu (tmux/Neovide penceresi)",
+        },
+      },
+    },
     filesystem = {
       filtered_items = {
         visible = false,
