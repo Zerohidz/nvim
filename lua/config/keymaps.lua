@@ -2,6 +2,8 @@
 -- Default keymaps that are always set: https://github.com/LazyVim/LazyVim/blob/main/lua/lazyvim/config/keymaps.lua
 -- Add any additional keymaps here
 
+require("config.alternate_highlight").setup()
+
 -- Subword navigasyonu: ]v = ileri (e gibi, sona), [v = geri (b gibi, başa)
 -- iv/av text object'iyle tutarlı. Türkçe klavyede: üv / ğv
 -- PascalCase: Transformer|Maintenanc|e  Frontend|Busines|s
