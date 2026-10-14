@@ -498,6 +498,14 @@ if vim.g.neovide then
   -- bu map orada da paste yapsın diye.
   vim.keymap.set("t", "<C-v>", paste, { noremap = true, silent = true, desc = "Paste (Neovide terminal mode)" })
 
+  -- Command+Backspace: arkaplan transparency aç/kapa (options.lua'daki 0.95 <-> 1.0)
+  local transparent_opacity = vim.g.neovide_opacity or 0.95
+  vim.keymap.set({ "n", "i", "v", "c", "t" }, "<D-BS>", function()
+    local opaque = (vim.g.neovide_opacity or transparent_opacity) >= 1.0
+    vim.g.neovide_opacity = opaque and transparent_opacity or 1.0
+    vim.notify("Neovide transparency: " .. (opaque and "açık" or "kapalı"))
+  end, { noremap = true, silent = true, desc = "Toggle transparency (Neovide)" })
+
   -- Shift+Enter: insert modda normal newline
   vim.keymap.set("i", "<S-CR>", "<CR>", { noremap = true, silent = true, desc = "Shift+Enter newline" })
   -- Shift+Enter: terminal modda kitty escape sequence gönder (Claude Code bunu bekliyor)
