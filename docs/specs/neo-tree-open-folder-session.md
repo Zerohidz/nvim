@@ -1,5 +1,7 @@
 # Spec — Neo-tree: klasörde yeni Neovim oturumu (`N`)
 
+> 2026-10-19 güncellemesi: bu belge ilk uygulamanın tarihsel kaydıdır. Güncel ortam seçimi ve `gN` için [terminal ve cd spec](neo-tree-terminal-and-cd.md) geçerlidir.
+
 > Durum: DOĞRULANDI
 > Tarih: 2026-10-14 · Onaylayan: dursun.korkmaz · Ortam: nvim 0.12.6, Neovide 0.16.2, tmux 3.8
 

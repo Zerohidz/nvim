@@ -78,21 +78,45 @@ return {
 			-- colorscheme from omarchy's theme directories (scanned live, so
 			-- new themes added by omarchy updates show up automatically)
 			local function theme_choices()
-				local choices = { "omarchy", "simple-focus" }
-				local seen = { omarchy = true, ["simple-focus"] = true }
+				local choices = {}
+				local seen = { omarchy = true }
+				local function add(name)
+					if type(name) == "string" and name ~= "" and not seen[name] then
+						seen[name] = true
+						table.insert(choices, name)
+					end
+				end
 
+				add("simple-focus")
 				for _, spec in ipairs(require("config.omarchy-themes").theme_specs()) do
 					for _, s in ipairs(spec) do
-						if s[1] == "LazyVim/LazyVim" and s.opts and s.opts.colorscheme then
-							local cs = s.opts.colorscheme
-							if not seen[cs] then
-								seen[cs] = true
-								table.insert(choices, cs)
+						if s[1] == "LazyVim/LazyVim" and s.opts then
+							add(s.opts.colorscheme)
+						end
+					end
+				end
+
+				for _, name in ipairs(vim.fn.getcompletion("", "color")) do
+					add(name)
+				end
+
+				local ok, lazy_config = pcall(require, "lazy.core.config")
+				if ok then
+					for _, plugin in pairs(lazy_config.plugins or {}) do
+						if type(plugin.dir) == "string" and vim.fn.isdirectory(plugin.dir) == 1 then
+							for _, extension in ipairs({ "lua", "vim" }) do
+								for _, file in ipairs(vim.fn.globpath(plugin.dir .. "/colors", "*." .. extension, false, true)) do
+									if vim.fn.filereadable(file) == 1 then
+										add(vim.fn.fnamemodify(file, ":t:r"))
+									end
+								end
 							end
 						end
 					end
 				end
 
+				table.sort(choices)
+				table.insert(choices, 1, "omarchy")
 				return choices
 			end
 

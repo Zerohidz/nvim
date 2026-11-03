@@ -41,6 +41,9 @@ return {
           exclude = { ".git/" },
         },
         projects = {
+          -- İç içe repo/worktree dizinlerini tara; derin kaynak ağaçlarında taramayı sınırla.
+          dev = { "~/dev", "~/projects", "~/dev/.worktrees" },
+          max_depth = 8,
           confirm = function(picker, item)
             require("snacks.picker.actions").load_session(picker, item)
             vim.schedule(function()

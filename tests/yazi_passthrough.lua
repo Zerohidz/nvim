@@ -8,6 +8,11 @@ local root = assert(vim.env.NVIM_TEST_ROOT)
 vim.opt.rtp:prepend(root)
 local passthrough = require("config.terminal_passthrough")
 local agent = require("config.terminal_agent")
+-- Gerçek kullanıcı eşlemeleri; normal mod gezinmesi LazyVim'in varsayılanı.
+dofile(root .. "/lua/config/keymaps.lua")
+for _, direction in ipairs({ "h", "j", "k", "l" }) do
+  vim.keymap.set("n", "<C-" .. direction .. ">", "<C-w>" .. direction)
+end
 
 local checks = 0
 local function check(value, label)
@@ -66,7 +71,9 @@ action(function()
   -- <C-h> fallback'inin pencere taşıması gözlemlensin diye solda ayrı bir pencere.
   vim.cmd("vsplit")
   ctx.left_win = vim.api.nvim_win_get_number(0)
+  ctx.left_id = vim.api.nvim_get_current_win()
   vim.cmd("wincmd l")
+  vim.cmd("enew") -- Soldaki pencere dosya buffer'ı olarak kalsın.
 
   -- yazi, kabuğun çocuğu olarak ve önplanda (gerçek kullanım şekli: terminalde `yazi`).
   ctx.job = vim.fn.termopen({ vim.o.shell, "-c", "yazi; exec " .. vim.o.shell })
@@ -93,6 +100,13 @@ action(function()
   check(passthrough.handle("<C-t>", collect), "handle(<C-t>) yazi'de tüketir")
   check(passthrough.handle("<C-h>", collect), "handle(<C-h>) yazi'de tüketir")
   check(sent[1] == "\011" and sent[2] == "\020" and sent[3] == "\008", "ham Ctrl byte'ları doğru")
+  for _, entry in ipairs({ { "j", "\010" }, { "k", "\011" }, { "l", "\012" } }) do
+    local received
+    check(passthrough.handle("<C-" .. entry[1] .. ">", function(byte)
+      received = byte
+    end), "Yazi Ctrl-" .. entry[1] .. " tüketir")
+    check(received == entry[2], "Ctrl-" .. entry[1] .. " ham byte doğru")
+  end
   -- <C-n> bilinçli olarak passthrough değil: terminal modundan çıkış kanalı.
   check(not passthrough.handle("<C-n>", function()
     error("gönderilmemeli")
@@ -115,6 +129,58 @@ action(function()
 end)
 wait_for(hides(".secret.txt"), "<C-h> tekrar basılınca gizledi", 10000)
 
+-- Her yönde komşu pencere oluşturarak mod ve buffer kapsamını doğrula.
+local splits = {
+  h = "aboveleft vsplit",
+  j = "belowright split",
+  k = "aboveleft split",
+  l = "belowright vsplit",
+}
+local function navigation_cases(mode, yazi)
+  for _, direction in ipairs(mode == "t" and { "j", "k", "l" } or { "h", "j", "k", "l" }) do
+    local source, target, scratch
+    local label = mode .. " Ctrl-" .. direction .. (yazi and " Yazi açık" or " Yazi dışında")
+    action(function()
+      vim.cmd("stopinsert")
+    end)
+    wait_for(function() return vim.api.nvim_get_mode().mode:sub(1, 1) == "n" end, label .. " hazırlık")
+    action(function()
+      source = mode == "i" and ctx.left_id or ctx.term_win
+      vim.api.nvim_set_current_win(source)
+      vim.cmd(splits[direction])
+      target = vim.api.nvim_get_current_win()
+      scratch = vim.api.nvim_create_buf(false, true)
+      vim.api.nvim_win_set_buf(target, scratch)
+      vim.api.nvim_set_current_win(source)
+      if mode ~= "n" then
+        type_keys("i")
+      end
+    end)
+    wait_for(function() return vim.api.nvim_get_mode().mode:sub(1, 1) == mode end, label .. " başlangıç modu")
+    action(function() type_keys("<C-" .. direction .. ">") end)
+    if mode == "t" and yazi then
+      action(function()
+        check(in_terminal_mode(), label .. " terminal modunda kaldı")
+        check(vim.api.nvim_get_current_win() == source, label .. " pencere değiştirmedi")
+      end)
+    else
+      wait_for(function()
+        return vim.api.nvim_get_current_win() == target and not in_terminal_mode()
+      end, label .. " komşu pencereye geçti")
+    end
+    action(function() vim.cmd("stopinsert") end)
+    wait_for(function() return vim.api.nvim_get_mode().mode:sub(1, 1) == "n" end, label .. " temizleme modu")
+    action(function()
+      vim.api.nvim_win_close(target, true)
+      vim.api.nvim_buf_delete(scratch, { force = true })
+      vim.api.nvim_set_current_win(ctx.term_win)
+    end)
+  end
+end
+navigation_cases("t", true)
+navigation_cases("n", true)
+navigation_cases("i", false)
+
 -- 4) yazi'dan çık -> aynı terminalde davranış eskisi gibi -------------------------
 action(function()
   vim.fn.chansend(ctx.job, "q")
@@ -122,6 +188,8 @@ end)
 wait_for(function()
   return not agent.is_yazi_running()
 end, "yazi kapanınca is_yazi_running() false")
+
+navigation_cases("t", false)
 
 action(function()
   type_keys("i")

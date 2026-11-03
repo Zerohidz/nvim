@@ -1,7 +1,7 @@
 -- neo-tree'de N: imlecin olduğu klasörde BAĞIMSIZ yeni bir Neovim oturumu açar.
--- tmux içindeysek yeni tmux penceresi (terminal nvim), değilsek yeni Neovide penceresi.
+-- Neovide: yeni GUI; tmux: yeni tmux penceresi; terminal: yeni Kitty penceresi.
 -- Argüman üretimi test edilebilir olsun diye saf (M.plan); spawn ayrı (M.open).
--- Spec: docs/specs/neo-tree-open-folder-session.md
+-- Spec: docs/specs/neo-tree-terminal-and-cd.md
 local M = {}
 
 -- Yeni oturum, cwd'si hedef klasör olarak neo-tree ile açılır. Tek argv elemanı:
@@ -14,9 +14,16 @@ M.tmux_shell_command = "nvim '+Neotree focus'"
 
 ---@param path string mutlak klasör yolu
 ---@param env table? ortam değişkenleri (test için; default vim.env)
----@return { kind: "tmux" | "neovide", cmd: string[] }
-function M.plan(path, env)
+---@param is_neovide boolean? test için GUI tespiti
+---@return { kind: string, cmd: string[] }
+function M.plan(path, env, is_neovide)
   env = env or vim.env
+  if is_neovide == nil then
+    is_neovide = vim.g.neovide and vim.g.neovide ~= 0
+  end
+  if is_neovide then
+    return { kind = "neovide", cmd = { "neovide", "--chdir", path, "--", M.nvim_command } }
+  end
   local in_tmux = type(env.TMUX) == "string" and env.TMUX ~= ""
   if in_tmux then
     local cmd = { "tmux", "new-window", "-c", path }
@@ -29,9 +36,11 @@ function M.plan(path, env)
     table.insert(cmd, M.tmux_shell_command)
     return { kind = "tmux", cmd = cmd }
   end
-  -- Neovide 0.16'da --working-dir YOK, doğru bayrak --chdir. "--" sonrası nvim'e
-  -- yorumlanmadan geçen argümanlar. --reuse-instance verilmez → yeni process = ayrı oturum.
-  return { kind = "neovide", cmd = { "neovide", "--chdir", path, "--", M.nvim_command } }
+  -- Kitty macOS: ayrı uygulama örneği, shell kullanmadan bağımsız terminal.
+  return {
+    kind = "kitty",
+    cmd = { "open", "-na", "kitty", "--args", "--directory", path, vim.fn.exepath("nvim"), M.nvim_command },
+  }
 end
 
 --- Yolun gerçek bir klasör olup olmadığını doğrular; olmazsa nil + sebep.
@@ -75,48 +84,66 @@ end
 ---@param path any mutlak klasör yolu (dosya verilirse parent'ı kullanılmaz; open_node kullan)
 ---@param env table? ortam değişkenleri (test için; default vim.env)
 ---@return boolean ok
-function M.open(path, env)
+function M.open(path, env, is_neovide)
   local absolute, err = M.resolve(path)
   if not absolute then
     vim.notify("Yeni oturum açılamadı: " .. err, vim.log.levels.ERROR)
     return false
   end
-  local planned = M.plan(absolute, env)
-  if vim.fn.executable(planned.cmd[1]) ~= 1 then
-    vim.notify("Yeni oturum açılamadı: '" .. planned.cmd[1] .. "' bulunamadı (PATH?)", vim.log.levels.ERROR)
-    return false
+  local planned = M.plan(absolute, env, is_neovide)
+  local dependencies = planned.kind == "kitty" and { "open", "kitty", "nvim" } or { planned.cmd[1] }
+  for _, binary in ipairs(dependencies) do
+    if vim.fn.executable(binary) ~= 1 then
+      vim.notify("Yeni oturum açılamadı: '" .. binary .. "' bulunamadı (PATH?)", vim.log.levels.ERROR)
+      return false
+    end
   end
-
-  if planned.kind == "tmux" then
-    -- tmux hızlı çıkar; stderr'i yakalayıp kullanıcıya gösterebiliyoruz.
-    local ok, handle = pcall(vim.system, planned.cmd, { detach = true }, function(result)
+  local label = ({ tmux = "tmux", kitty = "Kitty", neovide = "Neovide" })[planned.kind]
+  local function report(detail)
+    vim.notify("Yeni " .. label .. " penceresi açılamadı: " .. detail, vim.log.levels.ERROR)
+  end
+  -- open ve tmux kısa ömürlü launcher'lardır; başarısız çıkışları da yakalanır.
+  local options = { detach = true }
+  local on_exit
+  if planned.kind == "neovide" then
+    options.stdio = { "ignore", "ignore", "ignore" }
+  else
+    on_exit = function(result)
       if result.code ~= 0 then
         local detail = (result.stderr or ""):gsub("%s+$", "")
         if detail == "" then
-          detail = "tmux çıkış kodu " .. tostring(result.code)
+          detail = label .. " çıkış kodu " .. tostring(result.code)
         end
-        vim.notify("Yeni tmux penceresi açılamadı: " .. detail, vim.log.levels.ERROR)
+        vim.schedule(function()
+          report(detail)
+        end)
       end
-    end)
-    if not ok then
-      vim.notify("Yeni tmux penceresi açılamadı: " .. tostring(handle), vim.log.levels.ERROR)
-      return false
     end
-    vim.notify("Yeni oturum (tmux penceresi): " .. absolute)
-    return true
   end
-
-  -- GUI dalı: stdout/stderr pipe'ı ölü babaya bağlı kalmasın diye hepsi ignore;
-  -- spawn hatası (ENOENT) burada senkron yakalanır.
-  local ok, spawn_err = pcall(vim.system, planned.cmd, {
-    detach = true,
-    stdio = { "ignore", "ignore", "ignore" },
-  })
+  local ok, spawn_err = pcall(vim.system, planned.cmd, options, on_exit)
   if not ok then
-    vim.notify("Yeni Neovide penceresi açılamadı: " .. tostring(spawn_err), vim.log.levels.ERROR)
+    report(tostring(spawn_err))
     return false
   end
-  vim.notify("Yeni oturum (Neovide penceresi): " .. absolute)
+  vim.notify("Yeni oturum (" .. label .. " penceresi): " .. absolute)
+  return true
+end
+
+--- Mevcut oturumun çalışma dizinini ve Neo-tree kökünü seçilen klasöre taşır.
+function M.cd_node(node)
+  local folder, err = M.node_folder(node)
+  if not folder then
+    vim.notify("Klasöre geçilemedi: " .. err, vim.log.levels.ERROR)
+    return false
+  end
+  local ok, change_err = pcall(function()
+    vim.api.nvim_set_current_dir(folder)
+    require("neo-tree.command").execute({ source = "filesystem", action = "focus", dir = folder })
+  end)
+  if not ok then
+    vim.notify("Klasöre geçilemedi: " .. tostring(change_err), vim.log.levels.ERROR)
+    return false
+  end
   return true
 end
 

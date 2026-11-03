@@ -292,6 +292,8 @@ vim.api.nvim_create_autocmd("TermOpen", {
       if not close_codex_search("\x1b") then _fallback("q") end
     end, map_opts)
     vim.keymap.set("n", "<Esc>", function()
+      -- Buffer-local mapping bypasses LazyVim's global Escape/nohlsearch mapping.
+      vim.v.hlsearch = 0
       if not close_codex_search("\x1b") then _fallback("<Esc>") end
     end, map_opts)
     local terminal_expr_opts = { buffer = args.buf, expr = true, noremap = true }
@@ -458,9 +460,12 @@ vim.api.nvim_create_autocmd("TermOpen", {
   end,
 })
 
--- Insert modunda da Ctrl-H ile soldaki pencereye geç.
+-- Insert modunda da Ctrl-H/J/K/L ile komşu pencereye geç.
 -- Yazi terminal modundaki istisnayı terminal_passthrough buffer bazında yönetir.
 vim.keymap.set("i", "<C-h>", [[<Esc><C-w>h]], opts)
+vim.keymap.set("i", "<C-j>", [[<Esc><C-w>j]], opts)
+vim.keymap.set("i", "<C-k>", [[<Esc><C-w>k]], opts)
+vim.keymap.set("i", "<C-l>", [[<Esc><C-w>l]], opts)
 
 -- Terminal modundayken doğrudan pencere değiştirme
 vim.keymap.set("t", "<C-h>", [[<C-\><C-n><C-w>h]], opts)
@@ -483,9 +488,8 @@ vim.keymap.set({ "n", "t" }, "<C-,>", "<cmd>3ToggleTerm<CR>", { noremap = true, 
 -- Neovide: Hyprland Super+V → Shift+Insert gönderir, terminal bunu paste'e çevirirdi
 -- Neovide ise Shift+Insert'i handle etmez, explicit map lazım
 if vim.g.neovide then
-  local function paste()
-    vim.api.nvim_paste(vim.fn.getreg("+"), true, -1)
-  end
+  vim.keymap.set({ "n", "v", "i", "c", "t" }, "<D-w>", "<cmd>confirm qall<CR>", { noremap = true, silent = true, desc = "Close window (Neovide)" })
+  local paste = require("config.terminal_clipboard").paste
   -- macOS: Command+V, Neovide tarafından <D-v> olarak iletilir.
   vim.keymap.set({ "n", "v", "i", "c", "t" }, "<D-v>", paste, { noremap = true, silent = true, desc = "Paste (Neovide)" })
   -- Super+V (Hyprland → Shift+Insert olarak gelir)
@@ -514,13 +518,14 @@ if vim.g.neovide then
 
   -- Shift+Enter: insert modda normal newline
   vim.keymap.set("i", "<S-CR>", "<CR>", { noremap = true, silent = true, desc = "Shift+Enter newline" })
-  -- Shift+Enter: terminal modda kitty escape sequence gönder (Claude Code bunu bekliyor)
+  -- Codex: Alt+Enter newline, tmux extended-key negotiation gerektirmez.
   vim.keymap.set("t", "<S-CR>", function()
     local chan = vim.b.terminal_job_id
     if chan then
-      vim.api.nvim_chan_send(chan, "\x1b[13;2u")
+      local bytes = terminal_agent.is_codex_running() and "\x1b\r" or "\x1b[13;2u"
+      vim.api.nvim_chan_send(chan, bytes)
     end
-  end, { noremap = true, silent = true, desc = "Shift+Enter → kitty sequence (terminal)" })
+  end, { noremap = true, silent = true, desc = "Shift+Enter newline (terminal)" })
 
   -- Zoom (font + pencere birlikte büyür/küçülür): neovide_scale_factor tüm
   -- UI'yi ölçekliyor, numpad + gerektirmeyen <C-=>/<C--> art arda hızlı basılabilir.

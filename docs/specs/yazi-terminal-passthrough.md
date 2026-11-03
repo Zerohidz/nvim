@@ -9,6 +9,10 @@ Yazi'yi Neovim terminalinde kullanırken yazi'nin kendi kısayolları Neovim tar
 çalınmasın — özellikle `Ctrl-h` ile gizli dosyaları göster/gizle çalışsın. Yazi
 çalışmıyorken mevcut Neovim kısayollarının davranışı **birebir** korunmalı.
 
+Ctrl-H/J/K/L, Yazi çalışan terminalde yalnız normal modda pencere değiştirmeli;
+terminal modunda ham tuş Yazi'ye gitmeli. Diğer buffer'larda insert modunda da
+pencere gezinmesi çalışmalı.
+
 ## 2. Kapsam dışı
 
 - Yazi config'ini değiştirmek (`~/.config/yazi/keymap.toml` — kısayol yazi'de `<C-h>` kalır).
@@ -24,7 +28,8 @@ Yazi aynı terminal buffer'ının içinde başlayıp çıktığı için tespit *
 taraması `is_yazi_command` eşleştiricisiyle genişletildi. `config/terminal_passthrough`
 `TermOpen`'da o buffer'a buffer-local `t`-modu override'ları kurar; tuş basıldığında yazi
 önplandaysa ham Ctrl byte'ı `nvim_chan_send` ile job'a gider, değilse orijinal eylem
-(fallback) çalışır. Global mapping'lere dokunulmaz.
+(fallback) çalışır. Global terminal mapping'leri korunur; insert moduna Ctrl-H/J/K/L
+pencere gezinme eşlemeleri eklenir.
 
 **Reddedilen alternatifler ve neden:**
 
@@ -42,11 +47,11 @@ taraması `is_yazi_command` eşleştiricisiyle genişletildi. `config/terminal_p
 | D1 | Tespit tuş anında, yazi'nin job pid ağacında foreground (`ps` `+`) eşleşmesiyle | Yazi aynı buffer'da dynamic olarak başlayıp bitiyor | `terminal_agent.is_yazi_running` |
 | D2 | Yazi "agent" değildir: `agent_kind()` yazi döndürmez, ayrı matcher kullanılır | Codex/opencode navigasyon dalları yazi'ye uygulanmaz | `terminal_agent.is_yazi_command` |
 | D3 | Override'lar buffer-local, `TermOpen`'da, `nowait` | Global yüzey değişmez; sadece ilgili terminalde etkili | `terminal_passthrough.setup` |
-| D4 | Passthrough kümesi `{<C-h>, <C-k>, <C-t>, <C-v>}`; ham byte 0x08/0x0B/0x14/0x16 | Yazi'de bind'li + nvim'in çaldığı tuşlar | `terminal_passthrough.keys` |
+| D4 | Passthrough kümesi `{<C-h>, <C-j>, <C-k>, <C-l>, <C-t>, <C-v>}`; ham byte 0x08/0x0A/0x0B/0x0C/0x14/0x16 | Yazi terminalinde gezinme yalnız normal modda; diğer Ctrl kısayolları korunur | `terminal_passthrough.keys` |
 | D5 | `<C-n>` passthrough **değil** | Terminal modundan çıkış kanalı; kullanıcı tuzağa düşmesin | `keys` tablosuna almama |
-| D6 | `<C-j>`/`<C-l>` passthrough değil | Yazi'de bind'siz → pencere gezinmesi korunur | `keys` tablosuna almama |
+| D6 | Ctrl-H/J/K/L Yazi terminal modunda passthrough; normal modda gezinme | Kullanıcının dört yönde aynı kapsam talebi | `keys` ve insert keymaps |
 | D7 | `<C-v>` override yalnız `vim.g.neovide` varsa | Paste map'i sadece Neovide'da var; yoksa çalınan tuş yok | `setup` |
-| D8 | Fallback'lar orijinal eylemleri çağırır: nav `nvim_input("<C-\\><C-n><C-w>{h,k}")`, `<C-t>` → `:1ToggleTerm`, `<C-v>` → `nvim_paste` | Yazi yokken davranış birebir eski hali | `keys[k].fallback` |
+| D8 | Gezinme fallback'ları termcode dönüşümü + non-remap `nvim_feedkeys` kullanır | Ctrl-N eşlemesine tekrar girilmez; kabukta dört yönde gezinme korunur | `keys[k].fallback` |
 | D9 | `agent()` ortak `detect_in_buffer(match)` üzerinden çalışır | Kod tekrarı yok; mevcut 132+41 check'lik suite korunur | `terminal_agent` |
 
 ## 5. Kabul kriterleri
@@ -63,6 +68,10 @@ taraması `is_yazi_command` eşleştiricisiyle genişletildi. `config/terminal_p
 | AC8 | `is_yazi_command`: `yazi`, `/opt/homebrew/bin/yazi --no-config` true; `echo yazi`, `sh -c yazi`, `yazi-fu`, `""` false | unit test | 6 check PASS |
 | AC9 | Override'lar buffer-local; global map'ler bozulmaz | `maparg(...).buffer == 1` | "<C-h>/<C-t> buffer-local t map" PASS |
 | AC10 | Mevcut Codex/opencode adapter suite'i etkilenmez | `run-terminal-agent.sh` | `PASS: 132 checks` + `PASS: 41 checks` |
+| AC11 | Yazi terminal modunda Ctrl-J/K/L pencere değiştirmez ve ham byte gönderir | Gerçek Yazi/PTY dispatch + byte kontrolü | `run-yazi-passthrough.sh` |
+| AC12 | Yazi normal modunda Ctrl-H/J/K/L komşu pencereye geçer | Her yönde gerçek split + tuş dispatch | `run-yazi-passthrough.sh` |
+| AC13 | Başka buffer insert modundayken Ctrl-H/J/K/L komşu pencereye geçer | Yazi aynı anda açıkken gerçek split + dispatch | `run-yazi-passthrough.sh` |
+| AC14 | Yazi kapandıktan sonra aynı terminalde Ctrl-J/K/L gezinmesi geri gelir | Her yönde gerçek split + terminal dispatch | `run-yazi-passthrough.sh` |
 
 ## 6. Edge case'ler
 

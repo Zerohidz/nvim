@@ -2,17 +2,16 @@
 -- yazi arasında geçiş olduğu için "bu buffer'da yazi var mı" cevabı tuş anında verilmeli.
 -- terminal_agent'ın codex/opencode için kullandığı desen: tuş başına tek `ps` anlık görüntüsü.
 --
--- Sorun: keymaps.lua terminal modunda <C-h>/<C-k>/<C-t>/<C-v> tuşlarını nvim için çalıyor,
+-- Sorun: keymaps.lua terminal modunda <C-h>/<C-j>/<C-k>/<C-l>/<C-t>/<C-v> tuşlarını nvim için çalıyor,
 -- yazi'nin kendi bind'leri (gizli dosyalar, kill-eol, Ghostty/Neovide aç) hiç görülmüyor.
 -- Bu modül sadece yazi önplandayken o tuşları ham byte olarak job'a geri gönderir;
 -- yazi yokken davranış birebir eski haliyle devam eder.
 -- Spec: docs/specs/yazi-terminal-passthrough.md
 local M = {}
 
--- yazi'de bind'li + nvim'in t modunda çaldığı tuşlar.
+-- Yazi önplandayken pencere gezinme tuşları da terminal uygulamasına gider.
 -- Bilinçli olarak LİSTEDE YOK:
 --   <C-n>  terminal modundan çıkış kanalı (keymaps.lua) -> nvim'de kalmaya devam eder
---   <C-j>/<C-l>  yazi'de bind'siz -> pencere gezinmesi korunur
 --   <C-=>/<C-->/<C-0>/<D-v>/<S-CR>  zoom/yapıştırma, yazi kullanmıyor
 local keys = {
   ["<C-h>"] = {
@@ -22,10 +21,25 @@ local keys = {
       vim.api.nvim_feedkeys(input, "n", false)
     end,
   },
+  ["<C-j>"] = {
+    byte = "\010",
+    fallback = function()
+      local input = vim.api.nvim_replace_termcodes("<C-\\><C-n><C-w>j", true, false, true)
+      vim.api.nvim_feedkeys(input, "n", false)
+    end,
+  },
   ["<C-k>"] = {
     byte = "\011", -- yazi input: kill eol
     fallback = function()
-      vim.api.nvim_input("<C-\\><C-n><C-w>k")
+      local input = vim.api.nvim_replace_termcodes("<C-\\><C-n><C-w>k", true, false, true)
+      vim.api.nvim_feedkeys(input, "n", false)
+    end,
+  },
+  ["<C-l>"] = {
+    byte = "\012",
+    fallback = function()
+      local input = vim.api.nvim_replace_termcodes("<C-\\><C-n><C-w>l", true, false, true)
+      vim.api.nvim_feedkeys(input, "n", false)
     end,
   },
   ["<C-t>"] = {
@@ -37,7 +51,7 @@ local keys = {
   ["<C-v>"] = {
     byte = "\022", -- yazi: Open Neovide here
     fallback = function()
-      vim.api.nvim_paste(vim.fn.getreg("+"), true, -1)
+      require("config.terminal_clipboard").paste()
     end,
   },
 }

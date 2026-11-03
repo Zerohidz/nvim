@@ -3,10 +3,23 @@
 vim.g.loaded_netrw = 1
 vim.g.loaded_netrwPlugin = 1
 
+-- Tek klasörle başlatıldığında explorer ve picker'lar da o klasörü kullansın.
+-- VimEnter'a kadar bekle: relative argümanlar eski cwd'ye göre okunmuş olsun.
+if vim.fn.argc() == 1 and vim.fn.isdirectory(vim.fn.argv(0)) == 1 then
+  local startup_dir = vim.fn.fnamemodify(vim.fn.argv(0), ":p")
+  vim.api.nvim_create_autocmd("VimEnter", {
+    once = true,
+    callback = function()
+      vim.api.nvim_set_current_dir(startup_dir)
+    end,
+  })
+end
+
 -- langmapper, mapping varyantlarını oluştururken langmap'i okumalı.
 require("config.turkish_keys").setup_langmap()
 
 -- bootstrap lazy.nvim, LazyVim and your plugins
+require("config.kitty_keys").setup()
 require("config.lazy")
 
 -- Türkçe keymap ve makro hook'larını plugin setup'ından sonra yükle.

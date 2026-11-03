@@ -74,7 +74,8 @@ if vim.g.neovide then
   vim.g.neovide_scale_factor = vim.fn.has("mac") == 1 and RETINA_SCALE or LINUX_SCALE -- acilis defaultu; VimEnter'da duzeltildi
   vim.api.nvim_create_user_command("NeovideFitScale", fit_display_scale, {})
   vim.api.nvim_create_autocmd("VimEnter", { once = true, callback = fit_display_scale })
-  vim.g.neovide_opacity = 0.95
+  vim.g.neovide_opacity = 0.85 -- Kitty gibi %10 arka plan transparency
+  vim.g.neovide_window_blurred = true -- macOS native blur fazla yoğun; wallpaper detaylarını koru
   vim.g.neovide_padding_top = 30
   vim.g.neovide_padding_bottom = 30
   vim.g.neovide_padding_left = 30

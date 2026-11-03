@@ -50,18 +50,22 @@ gerçek terminal mode geçişi ve arama input'unu doğrular. Mevcut terminal buf
 mapping'leri `TermOpen` sırasında aldığı için config değişiminden sonra yeni terminal
 buffer aç veya Neovim/Neovide'yi yeniden başlat.
 
-### Neo-tree: klasörde yeni Neovim oturumu (`N`)
+### Neo-tree: yeni oturum (`N`) ve klasöre geçiş (`gN`)
 
 Neo-tree'de bir klasörün üzerinde `N`: o klasörü çalışma dizini edinen **bağımsız** yeni
 bir Neovim oturumu açar.
 
-- tmux içindeysen: yeni tmux penceresi (`tmux new-window -c <klasör> -n <ad> "nvim '+Neotree focus'"`).
-- tmux dışındaysan: yeni Neovide penceresi (`neovide --chdir <klasör> -- "+Neotree focus"`).
+- Neovide içindeysen: yeni Neovide penceresi (`neovide --chdir <klasör> -- "+Neotree focus"`); tmux ortam değişkeni miras alınmış olsa da GUI önceliklidir.
+- Terminalde tmux içindeysen: yeni tmux penceresi (`tmux new-window -c <klasör> -n <ad> "nvim '+Neotree focus'"`).
+- Diğer terminal oturumlarında: yeni Kitty penceresi ve içinde hedef klasörde Neovim (`open -na kitty --args --directory <klasör> <absolute-nvim> "+Neotree focus"`).
 - Dosyanın üzerinde basarsan klasörün kendisi değil **parent'ı** açılır.
 - Mevcut oturum etkilenmez; yeni süreç `detach` edildiği için bu nvim kapansa da yaşar.
-- Yol geçersiz / `tmux` veya `neovide` PATH'te yoksa sessiz kalmaz, hata bildirir.
+- `gN`: yeni pencere açmadan seçilen klasöre geçer; global cwd ve Neo-tree filesystem kökü değişir, açık dosyalar korunur. Dosyada parent klasör kullanılır.
+- `gP`: Neo-tree kökünün bir üst klasörüne çıkar; cwd ve Neo-tree kökünü günceller. Her basışta bir seviye yukarı çıkar.
+- `Esc`: normal arama vurgusunu temizler; mevcut preview / floating pencere iptal davranışını korur.
+- Bu kısayollar yalnız Neo-tree içinde geçerlidir. Geçersiz yol veya gerekli executable eksikse hata bildirir.
 
-Detay: `docs/specs/neo-tree-open-folder-session.md`.
+Detay: `docs/specs/neo-tree-terminal-and-cd.md`.
 Test: `./tests/run-open-folder-session.sh`.
 
 ### Yazi terminal passthrough (`C-h` gizli dosya)
