@@ -561,10 +561,7 @@ vim.keymap.set('n', '<leader>yp', function()
 end, { desc = 'Dosya yolunu kopyala' })
 
 
--- Manual
-vim.keymap.set('n', '<leader>k', function()
-  vim.cmd('Man ' .. vim.fn.expand('<cword>'))
-end, { desc = 'Open man page for word under cursor' })
+-- Manual: <leader>K (LazyVim Keywordprg → :Man <cword>). <leader>k/j multicursor'da.
 
 -- Arama: default düz metin (\V = very nomagic, sadece \ özel kalır).
 -- . (langmap → /) ve : (langmap → ?) da bu map'lere düşer.

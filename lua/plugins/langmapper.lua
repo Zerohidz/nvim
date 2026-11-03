@@ -16,11 +16,28 @@ return {
     -- register'daki gerçek i/./: tuşlarını yakalayıp E20 "Mark not set" vb.
     -- üretiyordu. Bu lhs'ler makro çalışırken ham (noremap) tuş olarak beslenir,
     -- normal kullanımda orijinal mapping'e yönlendirilir.
+    --
+    -- Yerel çok baytlı langmap (turkish_keys.native_multibyte_langmap): n/x/o'da yazılan ı/ç/Ş/ö/ş
+    -- map aramasından önce i/./:/,/; olur, varyanta gerek kalmaz; çakışan varyant (`'`→`i` gibi)
+    -- ise langmap'ten geçmiş tuşu yakalar (ı insert'e girmez). O modlarda kaydedilmez. Çakışmayan
+    -- varyantlar (ğ ü İ ...) kalır: which-key gibi tuşu getchar ile okuyanlara ham karakter gelir.
     local u = require("langmapper.utils")
     local ascii_collision = "[i%.:,;]"
+    local native = require("config.turkish_keys").native_multibyte_langmap
+    local langmap_modes = { n = true, x = true, o = true, v = true, [""] = true }
     local map_for_layouts = u._map_for_layouts
     u._map_for_layouts = function(mode, lhs, rhs, opts, map_cb)
       return map_for_layouts(mode, lhs, rhs, opts, function(m, tr_lhs, r, o)
+        -- Chord'lar (<C-x> ...) langmap'lenmez (neovim #11971); yalnız düz kısım çakışabilir.
+        if native and tr_lhs:gsub("%b<>", ""):find(ascii_collision) then
+          local modes = vim.tbl_filter(function(x)
+            return not langmap_modes[x]
+          end, type(m) == "table" and m or { m })
+          if #modes > 0 then
+            map_cb(type(m) == "table" and modes or modes[1], tr_lhs, r, o)
+          end
+          return
+        end
         if tr_lhs:find("<", 1, true) or not tr_lhs:find(ascii_collision) then
           return map_cb(m, tr_lhs, r, o)
         end

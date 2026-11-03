@@ -22,7 +22,9 @@ require("config.turkish_keys").setup()
 -- =========================
 
 -- Tek karakter sil
-vim.keymap.set("n", "x", '"_x', opts)
+-- x/s: map_register_cmd, nightly'deki count hatasına (#42468) karşı; hata yoksa düz '"_x'.
+local compat = require("config.nvim_compat")
+compat.map_register_cmd("n", "x", '"_', "x", opts)
 vim.keymap.set("v", "x", '"_x', opts)
 
 -- Normal mode delete
@@ -37,7 +39,7 @@ vim.keymap.set("n", "c", '"_c', opts)
 vim.keymap.set("v", "c", '"_c', opts)
 
 -- s
-vim.keymap.set("n", "s", '"_s')
+compat.map_register_cmd("n", "s", '"_', "s")
 vim.keymap.set("v", "s", '"_s')
 
 -- =========================
@@ -56,7 +58,7 @@ vim.keymap.set("n", "<leader>c", '"+c', opts)
 vim.keymap.set("v", "<leader>c", '"+c', opts)
 
 -- Cut s
-vim.keymap.set("n", "<leader>s", '"+s')
+compat.map_register_cmd("n", "<leader>s", '"+', "s")
 vim.keymap.set("v", "<leader>s", '"+s')
 
 -- Cut x (blackhole x'in aksine, bilinçli olarak pano'ya yazar)

@@ -72,6 +72,22 @@ return {
     opts = function(_, opts)
       opts.custom_textobjects = opts.custom_textobjects or {}
       opts.custom_textobjects.v = variable_segment
+      -- Yerel çok baytlı langmap'te `ı` mini.ai'nin `i`/`a` map'ine ulaşıyor ama id'yi mini.ai
+      -- getcharstr ile ham okuyor (langmap uygulanmaz): `yıİ` mini.ai'ye `İ` getirir. Türkçe Q
+      -- tuşunun ürettiği karakteri ASCII id'ye yönlendir. (Eski davranışta turkish_keys x/o map'leri
+      -- bunu yapıyor.)
+      if require("config.turkish_keys").native_multibyte_langmap then
+        local tr_ids = {
+          ["İ"] = '"', ["i"] = "'", ["ğ"] = "[", ["ü"] = "]", ["Ğ"] = "{", ["Ü"] = "}",
+          ["Ö"] = "<", ["Ç"] = ">", ["ç"] = ".", ["ö"] = ",", ["ş"] = ";", ["Ş"] = ":",
+        }
+        for tr, id in pairs(tr_ids) do
+          opts.custom_textobjects[tr] = opts.custom_textobjects[tr]
+            or function(ai_type, _, ai_opts)
+              return require("mini.ai").find_textobject(ai_type, id, ai_opts)
+            end
+        end
+      end
     end,
   },
 }

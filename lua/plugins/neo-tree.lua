@@ -14,6 +14,7 @@ return {
   opts = {
     -- Sadece neo-tree pencerelerinde geçerli (buffer-local), dışarıda hiçbir şeye dokunmaz.
     window = {
+      position = require("config.sidebar").position,
       mappings = {
         ["N"] = {
           function(state)

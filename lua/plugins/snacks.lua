@@ -25,6 +25,16 @@ return {
       sources = {
         -- <leader>sg: default düz metin (rg --fixed-strings), regex için <C-x>
         grep = { regex = false },
+        -- unified.nvim'in snacks backend'i (:Unified -s) sidebar'ı "left" diye sabit açıyor;
+        -- merge'den sonra çalışan config hook'uyla tarafı config/sidebar.lua'ya bağla.
+        git_diff = {
+          config = function(opts)
+            if type(opts.layout) == "table" and type(opts.layout.layout) == "table" then
+              opts.layout.layout.position = require("config.sidebar").position
+            end
+            return opts
+          end,
+        },
         files = {
           hidden = true,
           ignored = false,

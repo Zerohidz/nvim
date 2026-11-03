@@ -1,8 +1,32 @@
 -- lua/config/turkish_keys.lua
 local M = {}
 
+-- Neovim, çok baytlı langmap karakterini map aramasından ÖNCE mi çeviriyor? (neovim db0fca2,
+-- 0.13-dev; tek baytta 0.12'de de böyle.) Evet ise yazılan ı → i olur ve `i` lhs'li her map
+-- (ör. langmapper'ın `'` varyantı) ı'yı yutar. Sürüm yerine davranış ölçülür: backport ya da
+-- geri alma olursa da doğru kalır. Geçici "ıl" langmap'i: eski davranışta sadece l (sağa) çalışır.
+--
+-- Aynı değişiklik Ctrl'den sonraki karakteri her modda (insert dahil) langmap'liyor ama map'in
+-- lhs'ini çevirmiyor: langmapper'ın <C-ü> → <C-]> gibi map_all_ctrl map'lerine hiç ulaşılamıyor.
+-- <C-]> map'i yoksa <C-ü> ham kalıyor. ctrl_tr_lost.
+local function probe_langmap(keys, lhs)
+  local saved = vim.o.langmap
+  local buf = vim.api.nvim_create_buf(false, true)
+  local hit = false
+  vim.o.langmap = "ıl"
+  local ok = pcall(vim.api.nvim_buf_call, buf, function()
+    vim.keymap.set("n", lhs, function() hit = true end, { buffer = buf })
+    vim.api.nvim_feedkeys(vim.keycode(keys), "xt", false)
+  end)
+  vim.o.langmap = saved
+  vim.api.nvim_buf_delete(buf, { force = true })
+  return ok and hit
+end
+
 -- langmapper setup'ından önce seçenekleri hazırla; keymap/hook'lar sonra kurulur.
 function M.setup_langmap()
+  M.native_multibyte_langmap = probe_langmap("ı", "l")
+  M.ctrl_tr_lost = M.native_multibyte_langmap and not probe_langmap("<C-ı>", "<C-ı>")
   vim.opt.langremap = false
 
   local function escape(str)
@@ -36,6 +60,7 @@ function M.setup_langmap()
   end
 
   vim.opt.langmap = table.concat(pairs_list, ",")
+  M.langmap_pairs = maps
 end
 
 function M.setup()
@@ -63,12 +88,59 @@ function M.setup()
     { "Ş", ":" },
     { "ı", "i" },
   }
-  for _, pair in ipairs(tr_to_en) do
+  -- Yerel çok baytlı langmap'te textobject karakteri de çevriliyor; bu map'ler o zaman zararlı:
+  -- ı→i ile `i`→`'` zinciri dıw'yi d'w yapar, iX/aX o-modda `i`/`a`'yı belirsizleştirir.
+  for _, pair in ipairs(M.native_multibyte_langmap and {} or tr_to_en) do
     -- Tek karakter: op-pending ve visual'da her bağlamda çalışır (hızlı yazma fix)
     vim.keymap.set({ "x", "o" }, pair[1], pair[2], { remap = true, silent = true })
     -- iX / aX: belt and suspenders
     vim.keymap.set({ "x", "o" }, "i" .. pair[1], "i" .. pair[2], { remap = true, silent = true })
     vim.keymap.set({ "x", "o" }, "a" .. pair[1], "a" .. pair[2], { remap = true, silent = true })
+  end
+
+  -- Ctrl+TR kayboluyorsa (ctrl_tr_lost) map ile yakalanamaz: tuş map'siz çekirdeğe ulaştığında
+  -- (key == typed) on_key'de yut, langmapper'ın map_all_ctrl karşılığını (<C-ü> → <C-]> ...) gönder.
+  -- Langmap'in uygulanıp uygulanmaması önceki tuşun KeyTyped'ına bağlı (LANGMAP_ADJUST); langmapper
+  -- map'i eşleşirse key = K_LUA olur, o zaman dokunma. Beslenen tuşun typed'ı boş, döngü olmaz.
+  -- <C-ğ> (= <C-[> = Esc) langmapper.lua'da bilerek siliniyor; Esc map'lerine düşmesin diye noremap.
+  if M.ctrl_tr_lost then
+    local ctrl = {}
+    for _, pair in ipairs(M.langmap_pairs) do
+      if #pair[1] > 1 then
+        local en = pair[1] == "ğ" and pair[1] or ({ ["<"] = "lt" })[pair[2]] or pair[2]
+        ctrl[vim.keycode("<C-" .. pair[1] .. ">")] = { vim.keycode("<C-" .. en .. ">"), pair[1] == "ğ" and "ni" or "mi" }
+      end
+    end
+    vim.on_key(function(key, typed)
+      local to = ctrl[typed]
+      if to and key == typed and not vim.fn.mode():match("^[sS\19]") then
+        vim.api.nvim_feedkeys(to[1], to[2], false)
+        return ""
+      end
+    end, vim.api.nvim_create_namespace("turkish_keys_ctrl_tr"))
+  end
+
+  -- Yerel langmap'te kısmi eşleşme hatası: input.c handle_mapping, çevrilmiş çok baytlı ilk tuşu
+  -- (ü, 2 bayt) map'in lhs'iyle (], 1 bayt) bayt sayısıyla karşılaştırıyor; ü tek başına gelince
+  -- (insan hızı) `]v` kısmi eşleşme sayılmıyor, d ü v → d + ham ü + v. n modunda which-key'in `]`
+  -- tetikleyicisi bunu örtüyor; x/o'da aynı şeyi yap: `]`/`[` tam eşleşir, sonraki tuşu okur.
+  -- Map varsa remap'le besle (en uzun eşleşme kazanır; expr dönüşü olamaz: lhs ile başlayan rhs'nin
+  -- ilk tuşu yeniden map'lenmez), yoksa yerleşik komuta çevrilmiş karakterle noremap ver (map'ten
+  -- gelen tuşa langmap uygulanmaz). Hata düzelse de zararsız: kısmi eşleşme bu map'ten önce bekler.
+  if M.native_multibyte_langmap then
+    local lm = {}
+    for _, pair in ipairs(M.langmap_pairs) do lm[pair[1]] = pair[2] end
+    for _, key in ipairs({ "]", "[" }) do
+      vim.keymap.set({ "x", "o" }, key, function()
+        local ok, c = pcall(vim.fn.getcharstr)
+        local mode = vim.fn.mode(1):match("^no") and "o" or "x"
+        -- İptal: yerleşik `]<Esc>` operatörü bırakır, visual'da kalır.
+        if not ok or c == "\27" or c == "\3" then return mode == "o" and "<Esc>" or "" end
+        local mapped = vim.fn.maparg(key .. (lm[c] or c), mode) ~= "" or vim.fn.maparg(key .. c, mode) ~= ""
+        vim.api.nvim_feedkeys(mapped and key .. c or key .. (lm[c] or c), mapped and "mi" or "ni", false)
+        return ""
+      end, { expr = true, desc = key .. " (yerel langmap kısmi eşleşme düzeltmesi)" })
+    end
   end
 
   -- ---------------------------------------------------------------------------
