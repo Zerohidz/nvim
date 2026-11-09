@@ -59,7 +59,7 @@ function M.apply(buf)
             local hidden = line:sub(start, finish)
             vim.api.nvim_buf_set_extmark(buf, compact_ns, row - 1, start - 1, {
               end_col = finish,
-              conceal = hidden:find("%S") and "…" or "",
+              conceal = hidden:find("%S") and "…" or " ",
             })
           end
         end
