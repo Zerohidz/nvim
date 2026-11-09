@@ -1,5 +1,7 @@
 local M = {}
 local ns = vim.api.nvim_create_namespace("DatabaseColumnColors")
+local compact_ns = vim.api.nvim_create_namespace("DatabaseCompactColumns")
+local max_width = 40
 local palette = { "DiagnosticInfo", "DiagnosticHint", "DiagnosticWarn", "DiagnosticOk", "Special", "Identifier" }
 
 local function groups()
@@ -11,8 +13,13 @@ end
 function M.apply(buf)
   if not vim.api.nvim_buf_is_loaded(buf) or vim.bo[buf].filetype ~= "dbout" then return end
   vim.api.nvim_buf_clear_namespace(buf, ns, 0, -1)
+  vim.api.nvim_buf_clear_namespace(buf, compact_ns, 0, -1)
   local win = vim.fn.win_findbuf(buf)[1]
   if not win then return end
+  for _, result_win in ipairs(vim.fn.win_findbuf(buf)) do
+    vim.wo[result_win].conceallevel = 2
+    vim.wo[result_win].concealcursor = "nvc"
+  end
   local lines = vim.api.nvim_buf_get_lines(buf, 0, -1, false)
   local function mark(row, from, to, column)
     if to <= from then return end
@@ -45,6 +52,17 @@ function M.apply(buf)
         local from = vim.fn.virtcol2col(win, row, range[1] + 1)
         local to = vim.fn.virtcol2col(win, row, range[2] + 1)
         if from > 0 then mark(row, from - 1, to > 0 and to - 1 or #line, column) end
+        if range[2] - range[1] > max_width then
+          local start = vim.fn.virtcol2col(win, row, range[1] + max_width)
+          local finish = to > 0 and to - 1 or #line
+          if start > 0 and start - 1 < finish then
+            local hidden = line:sub(start, finish)
+            vim.api.nvim_buf_set_extmark(buf, compact_ns, row - 1, start - 1, {
+              end_col = finish,
+              conceal = hidden:find("%S") and "…" or "",
+            })
+          end
+        end
       end
     end
     for row, line in ipairs(lines) do
@@ -59,6 +77,7 @@ function M.apply(buf)
         end
         ranges[#ranges + 1] = { from, #line }
         if row > 1 then color_row(row - 1) end
+        color_row(row)
       elseif line:match("^%(%d+ rows?%)") or line:match("^%s*$") then
         ranges = nil
       elseif ranges then
