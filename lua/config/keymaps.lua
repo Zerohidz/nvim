@@ -231,7 +231,9 @@ vim.api.nvim_create_autocmd("TermOpen", {
             local count = math.max(1, math.floor((vim.api.nvim_win_get_height(0) + 3) / 6))
             agent_bytes = keys.codex_wheel:rep(count)
           end
-          vim.api.nvim_chan_send(vim.b.terminal_job_id, agent_bytes)
+          if not (agent == "codex" and keys.codex_wheel and terminal_agent.send_to_tmux_pane(agent_bytes)) then
+            vim.api.nvim_chan_send(vim.b.terminal_job_id, agent_bytes)
+          end
           vim.defer_fn(function() vim.cmd("redraw!") end, 80)
           return
         end
@@ -473,6 +475,15 @@ vim.keymap.set("t", "<C-j>", [[<C-\><C-n><C-w>j]], opts)
 vim.keymap.set("t", "<C-k>", [[<C-\><C-n><C-w>k]], opts)
 vim.keymap.set("t", "<C-l>", [[<C-\><C-n><C-w>l]], opts)
 
+-- Neovide'da önce nvim penceresini dene; kenarda Yabai penceresine geç.
+if vim.g.neovide then
+  for key, direction in pairs({ h = "west", j = "south", k = "north", l = "east" }) do
+    vim.keymap.set({ "n", "i", "t" }, "<C-" .. key .. ">", function()
+      require("config.window_navigation").move(key, direction)
+    end, { silent = true, desc = "Pencere odağını değiştir" })
+  end
+end
+
 -- 1 Numaralı Terminal (<C-t>)
 vim.keymap.set({ "n", "t" }, "<C-t>", "<cmd>1ToggleTerm<CR>", { noremap = true, silent = true, desc = "Terminal 1" })
 
@@ -526,6 +537,14 @@ if vim.g.neovide then
       vim.api.nvim_chan_send(chan, bytes)
     end
   end, { noremap = true, silent = true, desc = "Shift+Enter newline (terminal)" })
+
+  -- Avoid macOS desktop-switch shortcuts on Ctrl+Left/Right: Karabiner
+  -- sends private function keys for Ctrl+Option+H/L and their Shift variants.
+  for key, target in pairs({ ["<F17>"] = "<C-Left>", ["<F18>"] = "<C-Right>",
+    ["<F19>"] = "<C-S-Left>", ["<F20>"] = "<C-S-Right>" }) do
+    vim.keymap.set({ "n", "x", "o", "i", "c", "t" }, key, target,
+      { remap = true, silent = true, desc = "Word navigation (Neovide)" })
+  end
 
   -- Zoom (font + pencere birlikte büyür/küçülür): neovide_scale_factor tüm
   -- UI'yi ölçekliyor, numpad + gerektirmeyen <C-=>/<C--> art arda hızlı basılabilir.

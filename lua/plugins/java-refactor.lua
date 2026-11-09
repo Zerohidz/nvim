@@ -7,6 +7,13 @@ return {
         "--java-executable",
         "/opt/homebrew/opt/openjdk@21/libexec/openjdk.jdk/Contents/Home/bin/java",
       })
+      if vim.fn.getcwd() == vim.fn.expand("~/dev/JavaPlayground") then
+        opts.settings.java.configuration = {
+          runtimes = {
+            { name = "JavaSE-26", path = vim.fn.expand("~/.jenv/versions/26"), default = true },
+          },
+        }
+      end
     end,
     init = function()
       vim.api.nvim_create_autocmd("LspAttach", {

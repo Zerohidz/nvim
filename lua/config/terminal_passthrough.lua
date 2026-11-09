@@ -17,6 +17,9 @@ local keys = {
   ["<C-h>"] = {
     byte = "\008", -- yazi: hidden toggle (mgr) / backspace (input)
     fallback = function()
+      if vim.g.neovide then
+        return require("config.window_navigation").move("h", "west")
+      end
       local input = vim.api.nvim_replace_termcodes("<C-\\><C-n><C-w>h", true, false, true)
       vim.api.nvim_feedkeys(input, "n", false)
     end,
@@ -24,6 +27,9 @@ local keys = {
   ["<C-j>"] = {
     byte = "\010",
     fallback = function()
+      if vim.g.neovide then
+        return require("config.window_navigation").move("j", "south")
+      end
       local input = vim.api.nvim_replace_termcodes("<C-\\><C-n><C-w>j", true, false, true)
       vim.api.nvim_feedkeys(input, "n", false)
     end,
@@ -31,6 +37,9 @@ local keys = {
   ["<C-k>"] = {
     byte = "\011", -- yazi input: kill eol
     fallback = function()
+      if vim.g.neovide then
+        return require("config.window_navigation").move("k", "north")
+      end
       local input = vim.api.nvim_replace_termcodes("<C-\\><C-n><C-w>k", true, false, true)
       vim.api.nvim_feedkeys(input, "n", false)
     end,
@@ -38,6 +47,9 @@ local keys = {
   ["<C-l>"] = {
     byte = "\012",
     fallback = function()
+      if vim.g.neovide then
+        return require("config.window_navigation").move("l", "east")
+      end
       local input = vim.api.nvim_replace_termcodes("<C-\\><C-n><C-w>l", true, false, true)
       vim.api.nvim_feedkeys(input, "n", false)
     end,

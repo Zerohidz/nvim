@@ -140,7 +140,7 @@ local function system(command)
     return output
   end
 end
-local function tmux_pane(process, run)
+local function tmux_pane(process, run, pane_format)
   local words = argv(process.command)
   if basename(words[1]) ~= "tmux" then
     return nil
@@ -161,7 +161,8 @@ local function tmux_pane(process, run)
   for line in clients:gmatch("[^\n]+") do
     local pid, tty = line:match("^(%d+)\t(.+)$")
     if tonumber(pid) == process.pid then
-      local pane = run(vim.list_extend(command, { "display-message", "-c", tty, "-p", "#{pane_pid}" }))
+      local pane = run(vim.list_extend(vim.deepcopy(command), { "display-message", "-c", tty, "-p", pane_format or "#{pane_pid}" }))
+      if pane_format then return pane and pane:match("(%%%d+)"), command end
       return pane and tonumber(pane:match("^%s*(%d+)%s*$"))
     end
   end
@@ -231,6 +232,18 @@ end
 
 -- One ps snapshot per key press: returns kind ("codex"/"opencode") and pid of
 -- the foreground agent in the current terminal buffer, or nil.
+-- Send directly to the active pane: tmux otherwise interprets synthetic wheel
+-- events as its own mouse input instead of forwarding them to the TUI.
+function M.send_to_tmux_pane(bytes)
+  local pid, processes = M.detect_in_buffer(function(command)
+    return basename(argv(command)[1]) == "tmux"
+  end)
+  if not pid then return false end
+  local pane_id, command = tmux_pane(processes[pid], system, "#{pane_id}")
+  if not pane_id then return false end
+  return system(vim.list_extend(command, { "send-keys", "-t", pane_id, "-l", "--", bytes })) ~= nil
+end
+
 function M.agent()
   local found, processes = M.detect_in_buffer(function(command)
     return M.agent_kind(command) ~= nil
