@@ -11,10 +11,7 @@ order by 1, 2]]
 
 -- Expand every connection without blocking the UI: the table listing runs in parallel
 -- psql jobs, and each connection is opened (cheap but ~150ms) as its result arrives.
-local function expand_all_async()
-  local urls = vim.fn.CodexDBUIUrls()
-  vim.fn.CodexDBUIExpandAll(0)
-  for key, url in pairs(urls) do
+function M.expand_one(key, url)
     if url:match("^postgres") then
       vim.system({ "psql", "-X", "-A", "-t", "-F", "\t", "-c", tables_query, url },
         { text = true, env = { PGCONNECT_TIMEOUT = "10" } },
@@ -28,7 +25,7 @@ local function expand_all_async()
             local schema, table = line:match("^([^\t]*)\t(.*)$")
             if schema then rows[#rows + 1] = { schema, table } end
           end
-          if vim.fn.CodexDBUIPrepare(key) ~= "" then
+          if vim.fn.CodexDBUIPrepare(key, 1) ~= "" then
             pcall(vim.fn.CodexDBUIApplyTables, key, rows)
           else
             pcall(function() vim.fn["db_ui#drawer#get"]().render() end)
@@ -36,10 +33,18 @@ local function expand_all_async()
         end))
     else
       vim.schedule(function()
-        vim.fn.CodexDBUIPrepare(key)
+        vim.fn.CodexDBUIPrepare(key, 0)
         pcall(function() vim.fn["db_ui#drawer#get"]().render() end)
       end)
     end
+end
+
+local function expand_all_async()
+  local urls = vim.fn.CodexDBUIUrls()
+  vim.fn.CodexDBUIExpandAll(0)
+  for key, url in pairs(urls) do
+    vim.fn.CodexDBUISetOpening(key)
+    M.expand_one(key, url)
   end
 end
 
@@ -83,13 +88,26 @@ function M.setup()
       return urls
     endfunction
 
-    function! CodexDBUIPrepare(key) abort
+    function! CodexDBUISetOpening(key) abort
       let drawer = db_ui#drawer#get()
+      let drawer.dbui.dbs[a:key].expanded = 1
+    endfunction
+
+    function! CodexDBUIPrepare(key, validated) abort
+      let drawer = db_ui#drawer#get()
+      if !has_key(drawer.dbui.dbs, a:key) || !drawer.dbui.dbs[a:key].expanded
+        return ''
+      endif
       let db = drawer.dbui.dbs[a:key]
-      call CodexDBUISetExpanded(db, 0)
-      let db.expanded = 1
       call drawer.load_saved_queries(db)
-      call drawer.dbui.connect(db)
+      if a:validated
+        let db.conn = db#resolve(db.url)
+        let db.conn_tried = 1
+        let db.conn_error = ''
+        call drawer.dbui.populate_schema_info(db)
+      else
+        call drawer.dbui.connect(db)
+      endif
       if empty(db.conn)
         return ''
       endif
@@ -139,6 +157,10 @@ function M.setup()
     endfunction
 
     function! CodexDBUIToggleConnection(db) dict abort
+      if a:db.expanded && a:db.url =~# '^postgres'
+        call luaeval('require("config.database_help").expand_one(_A[1], _A[2])', [a:db.key_name, a:db.url])
+        return
+      endif
       call call(self.codex_original_toggle_db, [a:db], self)
       if a:db.expanded && a:db.schema_support && has_key(a:db.schemas.items, 'public')
         let a:db.schemas.expanded = 1
@@ -165,6 +187,17 @@ function M.setup()
       endif
     endfunction
   ]])
+  vim.api.nvim_create_autocmd("User", {
+    group = vim.api.nvim_create_augroup("DatabaseSidebarPosition", { clear = true }),
+    pattern = "DBUIOpened",
+    callback = function()
+      if require("config.sidebar").position == "right" and vim.fn.winnr("$") > 1 then
+        local width = vim.api.nvim_win_get_width(0)
+        vim.cmd("wincmd L")
+        vim.api.nvim_win_set_width(0, width)
+      end
+    end,
+  })
   vim.api.nvim_create_autocmd("FileType", {
     group = vim.api.nvim_create_augroup("DatabaseHelp", { clear = true }),
     pattern = "dbui",

@@ -6,13 +6,6 @@ local function expanded(buf)
   return value == true or value == 1
 end
 
-local function update_wrap(buf)
-  for _, win in ipairs(vim.fn.win_findbuf(buf)) do
-    vim.wo[win].wrap = expanded(buf)
-    vim.wo[win].linebreak = true
-  end
-end
-
 local function records(lines, expanded)
   local result, block, row, active, continuation = {}, 0, 0, false, false
   for index, line in ipairs(lines) do
@@ -86,7 +79,6 @@ function M.toggle()
     if type(db) == "table" then pending[db.output] = nil end
     error(err)
   end
-  update_wrap(buf)
 end
 
 -- FK atlama geçmişi: her atlamadan önceki sorgu (dosyası), görünümü ve imlecin hangi kayıtta /
@@ -233,10 +225,7 @@ function M.setup()
     callback = function(event)
       if vim.bo[event.buf].filetype == "dbout" then
         vim.schedule(function()
-          if vim.api.nvim_buf_is_valid(event.buf) then
-            M.resize(event.buf)
-            update_wrap(event.buf)
-          end
+          if vim.api.nvim_buf_is_valid(event.buf) then M.resize(event.buf) end
         end)
       end
     end,
@@ -246,10 +235,6 @@ function M.setup()
     pattern = "*DBExecutePost",
     callback = function(event)
       local path = event.match:gsub("/DBExecutePost$", "")
-      vim.schedule(function()
-        local buf = vim.fn.bufnr(path)
-        if buf > 0 and vim.api.nvim_buf_is_loaded(buf) then update_wrap(buf) end
-      end)
       local selected = pending[path]
       if not selected then return end
       pending[path] = nil
