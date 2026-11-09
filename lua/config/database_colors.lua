@@ -36,22 +36,7 @@ function M.apply(buf)
     for row, line in ipairs(lines) do
       if line:match("^%-%[ RECORD %d+ %]") then
         column = 0
-        local dash = line:find("%-+$")
-        if dash and #line - dash > 60 then
-          vim.api.nvim_buf_set_extmark(buf, compact_ns, row - 1, dash + 59, {
-            end_col = #line, conceal = "",
-          })
-        end
       else
-        local spaces = line:find(" +%+?$")
-        if spaces and #line - spaces > 1 then
-          local finish = line:sub(-1) == "+" and #line - 1 or #line
-          if finish > spaces - 1 then
-            vim.api.nvim_buf_set_extmark(buf, compact_ns, row - 1, spaces - 1, {
-              end_col = finish, conceal = "",
-            })
-          end
-        end
         local pipe = line:find("|", 1, true)
         if pipe then
           column = column + 1
